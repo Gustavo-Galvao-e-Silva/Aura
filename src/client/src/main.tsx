@@ -1,6 +1,17 @@
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router";
-import App from "./App.tsx";
+import { BrowserRouter, Route, Routes } from "react-router";
+import { ClerkProvider } from "@clerk/react-router";
+
+import "./index.css";
+import FinGlobalLandingPage from "./pages/LandingPage";
+import FinGlobalLoginPage from "./pages/Login";
+import FinGlobalRegisterPage from "./pages/Register";
+
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+}
 
 const root = document.getElementById("root");
 
@@ -10,6 +21,12 @@ if (!root) {
 
 ReactDOM.createRoot(root).render(
   <BrowserRouter>
-    <App />
-  </BrowserRouter>,
+    <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+      <Routes>
+        <Route path="/" element={<FinGlobalLandingPage />} />
+        <Route path="/register" element={<FinGlobalRegisterPage />} />
+        <Route path="/login" element={<FinGlobalLoginPage />} />
+      </Routes>
+    </ClerkProvider>
+  </BrowserRouter>
 );
