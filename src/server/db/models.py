@@ -1,20 +1,23 @@
-from sqlalchemy import Column, Integer, String, Float, Date, Boolean, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Float, Date, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
 Base = declarative_base()
 
+
 class Liability(Base):
     __tablename__ = "liabilities"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True) # e.g., "USF Tuition"
+    username = Column(String, ForeignKey("users.username"), nullable=False, index=True)
+
+    name = Column(String, index=True)  # e.g., "USF Tuition"
     amount = Column(Float, nullable=False)
-    currency = Column(String(3), default="USD") # Defaulting to USD as discussed
+    currency = Column(String(3), default="USD")
     due_date = Column(Date, nullable=False)
-    is_predicted = Column(Boolean, default=False) # Distinguish between real OCR and AI inference
+    is_predicted = Column(Boolean, default=False)
     is_paid = Column(Boolean, default=False)
-    category = Column(String, nullable=True)      # Tuition, Rent, etc.
+    category = Column(String, nullable=True)
     priority_level = Column(Integer, default=2)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -25,3 +28,11 @@ class AuditLog(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     decision_hash = Column(String, unique=True) # The hash for the Stellar Ledger
     reasoning = Column(String)                  # The "Proof of Reason" text
+
+class Users(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    fullname = Column(String, nullable=False)
+    username = Column(String, unique=True, nullable=False, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)

@@ -10,11 +10,13 @@ import {
   User,
   Wallet,
 } from "lucide-react";
+import UserClient, { type CreateUserPayload } from "../API/UserClient";
+import createUser from "../API/UserClient";
+
 
 export default function FinGlobalRegisterPage() {
   const navigate = useNavigate();
   const { isLoaded, signUp, setActive } = useSignUp();
-
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -65,6 +67,8 @@ export default function FinGlobalRegisterPage() {
 
       setError(clerkError);
     } finally {
+
+      createUser({fullName: fullName, email: email, username: username} as CreateUserPayload)
       setIsSubmitting(false);
     }
   }
@@ -89,7 +93,8 @@ export default function FinGlobalRegisterPage() {
         console.log("requiredFields:", completeSignUp.requiredFields);
         console.log("unverifiedFields:", completeSignUp.unverifiedFields);
        */}
-
+      
+       
       if (completeSignUp.status === "complete") {
         await setActive({ session: completeSignUp.createdSessionId });
         navigate("/dashboard");
@@ -98,6 +103,8 @@ export default function FinGlobalRegisterPage() {
           `Verification not complete. Current status: ${completeSignUp.status}`
         );
       }
+      
+
     } catch (err: any) {
       const clerkError =
         err?.errors?.[0]?.longMessage ||
