@@ -2,11 +2,11 @@
 
 # Start the database and adminer
 up:
-	docker-compose up -d
+	docker compose up -d
 
 # Stop and wipe the database (useful for schema changes)
 wipe:
-	docker-compose down -v
+	docker compose down -v
 
 # Start the FastAPI server
 dev:
