@@ -14,3 +14,5 @@ Pillow
 requests
 python-dotenv
 python-multipart
+SQLAlchemy
+psycopg2-binary
