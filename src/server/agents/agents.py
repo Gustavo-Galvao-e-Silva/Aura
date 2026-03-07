@@ -49,7 +49,7 @@ def visionary_accountant_node(image_bytes: bytes):
         # Clean JSON if model includes markdown formatting
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
-        
+
         return json.loads(text.strip())
     except Exception as e:
         print(f"Visionary Accountant Error: {e}")
