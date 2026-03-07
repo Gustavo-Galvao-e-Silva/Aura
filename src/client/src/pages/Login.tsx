@@ -29,7 +29,7 @@ export default function FinGlobalLoginPage() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        navigate("/");
+        navigate("/dashboard");
       } else {
         setError(`Sign-in not complete. Current status: ${result.status}`);
       }

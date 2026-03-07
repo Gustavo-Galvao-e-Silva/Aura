@@ -83,14 +83,16 @@ export default function FinGlobalRegisterPage() {
          code,
        });
 
+       {/*
         console.log("status:", completeSignUp.status);
         console.log("missingFields:", completeSignUp.missingFields);
         console.log("requiredFields:", completeSignUp.requiredFields);
         console.log("unverifiedFields:", completeSignUp.unverifiedFields);
+       */}
 
       if (completeSignUp.status === "complete") {
         await setActive({ session: completeSignUp.createdSessionId });
-        navigate("/");
+        navigate("/dashboard");
       } else {
         setError(
           `Verification not complete. Current status: ${completeSignUp.status}`
