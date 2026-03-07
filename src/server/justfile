@@ -1,0 +1,29 @@
+# Aura Development Commands
+
+# Start the database and adminer
+up:
+	docker-compose up -d
+
+# Stop and wipe the database (useful for schema changes)
+wipe:
+	docker-compose down -v
+
+# Start the FastAPI server
+dev:
+	PYTHONPATH=. uvicorn my_fastapi_app.app.main:app --reload
+
+# Enter the Postgres Shell inside Docker
+db-shell:
+	docker exec -it server-db-1 psql -U postgres
+
+# Test the Vision Agent with an image
+# Usage: just upload <filename>
+upload file:
+	curl -X POST "http://localhost:8000/upload-invoice" \
+	     -H "accept: application/json" \
+	     -H "Content-Type: multipart/form-data" \
+	     -F "file=@{{file}}"
+
+# View the status of all current liabilities
+status:
+	curl -s http://localhost:8000/status | jq .
