@@ -31,18 +31,3 @@ def fx_strategist_node(state: AuraState):
         "market_prediction": prediction
     }
 
-def visionary_accountant_node(image_bytes: bytes):
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    img = Image.open(io.BytesIO(image_bytes))
-    response = model.generate_content([visionary_accountant_prompt, img])
-
-    try:
-        # Robust JSON cleaning
-        text = response.text
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0]
-        liability = json.loads(text.strip())
-        return liability
-    except Exception as e:
-        print(f"Vision Parsing Error: {e}")
-        return None
