@@ -8,12 +8,10 @@ from agents.agents import visionary_accountant_node
 
 from agents.aura_graph import aura_graph
 
-from db.session import engine
-from db.models import Base
-
 from sqlalchemy.orm import Session
-from db.session import get_db
-from db.models import Liability
+
+from db.models import Base, Liability
+from my_fastapi_app.app.db.session import engine, get_db
 
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 
