@@ -9,12 +9,14 @@ def build_aura_graph():
 
     # 2. Add our Nodes
     workflow.add_node("fx_strategist", fx_strategist_node)
-    
+    workflow.add_node("find_route", smart_router_node)
+
     # Note: visionary_accountant_node is usually called directly via 
     # the FastAPI endpoint, but you could add it here too!
 
     # 3. Define the Flow
     workflow.set_entry_point("fx_strategist")
+    workflow.add_edge("check_market", "find_route")
     workflow.add_edge("fx_strategist", END)
 
     # 4. Compile
