@@ -1,1 +1,11 @@
 langchain
+langgraph
+pydantic
+alpha_vantage
+requests
+pandas
+google-generativeai
+openai
+fastapi
+plaid-python
+twilio
