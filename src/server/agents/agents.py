@@ -31,3 +31,26 @@ def fx_strategist_node(state: AuraState):
         "market_prediction": prediction
     }
 
+def visionary_accountant_node(image_bytes: bytes):
+    """
+    Role 2: Updated to use the new 'google-genai' Client syntax.
+    """
+    try:
+        # Modern synchronous generation call
+        response = client.models.generate_content(
+            model="gemini-2.0-flash", # Use the latest flash model
+            contents=[
+                visionary_accountant_prompt,
+                Image.open(io.BytesIO(image_bytes))
+            ]
+        )
+
+        text = response.text
+        # Clean JSON if model includes markdown formatting
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0]
+        
+        return json.loads(text.strip())
+    except Exception as e:
+        print(f"Visionary Accountant Error: {e}")
+        return None
