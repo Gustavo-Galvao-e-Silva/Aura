@@ -1,6 +1,6 @@
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
-import { ClerkProvider } from '@clerk/react'
+import { ClerkProvider } from "@clerk/react-router";
 
 import "./index.css";
 import FinGlobalLandingPage from "./pages/LandingPage";

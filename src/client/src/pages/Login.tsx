@@ -1,20 +1,62 @@
-import { Banknote, Eye, Lock, LogIn, Mail, MoveLeft, Wallet } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { useSignIn } from "@clerk/react-router/legacy";
+import { Eye, EyeOff, Lock, LogIn, Mail, MoveLeft, Wallet } from "lucide-react";
 
 export default function FinGlobalLoginPage() {
+  const navigate = useNavigate();
+  const { isLoaded, signIn, setActive } = useSignIn();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    if (!isLoaded) return;
+
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      const result = await signIn.create({
+        identifier: email,
+        password,
+      });
+
+      if (result.status === "complete") {
+        await setActive({ session: result.createdSessionId });
+        navigate("/");
+      } else {
+        setError(`Sign-in not complete. Current status: ${result.status}`);
+      }
+    } catch (err: any) {
+      const clerkError =
+        err?.errors?.[0]?.longMessage ||
+        err?.errors?.[0]?.message ||
+        "Something went wrong while signing in.";
+
+      setError(clerkError);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="flex h-full flex-col">
         <main className="flex min-h-0 flex-1 items-center justify-center px-4 py-4">
           <div className="flex w-full max-w-[480px] flex-col">
-            <a
+            <Link
               className="mb-4 flex items-center gap-2 self-start text-sm font-medium text-slate-500 transition-colors hover:text-blue-700"
-              href="/"
+              to="/"
             >
-              <span className="material-symbols-outlined text-lg">
-                <MoveLeft/>
-              </span>
+              <MoveLeft className="h-4 w-4" />
               Back to home
-            </a>
+            </Link>
 
             <div className="flex w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
               <div className="relative h-40 w-full overflow-hidden bg-blue-700/10">
@@ -30,22 +72,17 @@ export default function FinGlobalLoginPage() {
               </div>
 
               <div className="flex flex-col gap-5 px-8 pt-4 pb-6">
-                <a
+                <Link
                   className="mb-1 flex items-center gap-2 transition-opacity hover:opacity-80"
-                  href="/"
+                  to="/"
                 >
                   <div className="text-blue-700">
-                    <span
-                      className="material-symbols-outlined text-4xl"
-                      style={{ fontVariationSettings: "'FILL' 1" }}
-                    >
-                      <Wallet/>
-                    </span>
+                    <Wallet className="h-9 w-9" />
                   </div>
                   <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
                     Thea.do
                   </h1>
-                </a>
+                </Link>
 
                 <div className="flex flex-col gap-1">
                   <h2 className="text-3xl font-black leading-tight tracking-tight text-slate-900 dark:text-slate-100">
@@ -56,21 +93,23 @@ export default function FinGlobalLoginPage() {
                   </p>
                 </div>
 
-                <form className="flex flex-col gap-4">
+                <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                   <div className="flex flex-col gap-2">
                     <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                       Email
                     </label>
                     <div className="relative">
                       <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                        <span className="material-symbols-outlined text-lg">
-                          <Mail/>
-                        </span>
+                        <Mail className="h-4 w-4" />
                       </div>
                       <input
                         className="h-12 w-full rounded-lg border border-slate-200 bg-white pl-10 text-sm text-slate-900 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                         placeholder="Enter your student email"
                         type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        autoComplete="email"
+                        required
                       />
                     </div>
                   </div>
@@ -80,44 +119,57 @@ export default function FinGlobalLoginPage() {
                       <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Password
                       </label>
-                      <a
+                      <Link
                         className="text-sm font-medium text-blue-700 hover:underline"
-                        href="#"
+                        to="/forgot-password"
                       >
                         Forgot password?
-                      </a>
+                      </Link>
                     </div>
 
                     <div className="relative">
                       <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                        <span className="material-symbols-outlined text-lg">
-                          <Lock/>
-                        </span>
+                        <Lock className="h-4 w-4" />
                       </div>
                       <input
                         className="h-12 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-10 text-sm text-slate-900 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                         placeholder="Enter your password"
-                        type="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        autoComplete="current-password"
+                        required
                       />
                       <button
                         className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                         type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
                       >
-                        <span className="material-symbols-outlined text-lg">
-                            <Eye/>
-                        </span>
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </button>
                     </div>
                   </div>
 
+                  {error && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+                      {error}
+                    </div>
+                  )}
+
                   <button
-                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-3 font-bold text-white transition-colors hover:bg-blue-800"
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-3 font-bold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
                     type="submit"
+                    disabled={!isLoaded || isSubmitting}
                   >
-                    Log In
-                    <span className="material-symbols-outlined text-sm">
-                      <LogIn/>
-                    </span>
+                    {isSubmitting ? "Signing in..." : "Log In"}
+                    {!isSubmitting && <LogIn className="h-4 w-4" />}
                   </button>
                 </form>
 
@@ -127,14 +179,17 @@ export default function FinGlobalLoginPage() {
                   </div>
                   <div className="relative flex justify-center text-sm">
                     <span className="bg-white px-2 text-slate-500 dark:bg-slate-900">
-                      New to FinGlobal?
+                      New to Thea.do?
                     </span>
                   </div>
                 </div>
 
-                <a href="/register" className="w-full rounded-lg bg-blue-700/10 px-4 py-3 font-bold text-blue-700 transition-colors hover:bg-blue-700/20 flex justify-center items-center">
-                  Create a student account
-                </a>
+                <Link
+                  to="/register"
+                  className="flex w-full items-center justify-center rounded-lg bg-blue-700/10 px-4 py-3 font-bold text-blue-700 transition-colors hover:bg-blue-700/20"
+                >
+                  Create an account
+                </Link>
 
                 <div className="text-center">
                   <p className="text-xs text-slate-400 dark:text-slate-500">
@@ -145,21 +200,6 @@ export default function FinGlobalLoginPage() {
             </div>
           </div>
         </main>
-
-        <footer className="shrink-0 border-t border-slate-200 px-6 py-4 text-sm text-slate-500 dark:border-slate-800">
-          <div className="flex flex-wrap justify-center gap-6">
-            <a className="hover:text-blue-700" href="#">
-              Terms of Service
-            </a>
-            <a className="hover:text-blue-700" href="#">
-              Privacy Policy
-            </a>
-            <a className="hover:text-blue-700" href="#">
-              Help Center
-            </a>
-            <span>© 2024 FinGlobal Inc.</span>
-          </div>
-        </footer>
       </div>
     </div>
   );
