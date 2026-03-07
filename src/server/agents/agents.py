@@ -7,7 +7,8 @@ from PIL import Image
 
 # Use absolute imports from the server root
 from agents.state import AuraState
-from agents.prompts import visionary_accountant_prompt
+
+from agents.prompts import get_visionary_accountant_prompt
 
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
