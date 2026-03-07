@@ -319,8 +319,6 @@ export default function FinGlobalRegisterPage() {
               </div>
             </div>
           </div>
-
-
         </div>
       </main>
     </div>

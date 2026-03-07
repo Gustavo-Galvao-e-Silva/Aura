@@ -1,95 +1,30 @@
 import { useUser } from "@clerk/react-router";
 import { BellDot, Clock, ClockFading, Home, House, Route, School, ScrollText, Search, ShoppingCart, TrendingDownIcon, TrendingUp, Wallet } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, type NavigateFunction } from "react-router";
+import Navbar from "../components/Navbar";
+import type { qo } from "@clerk/shared/index-BoUnhTXE";
+import { useEffect } from "react";
 
 export default function Dashboard() {
     const { isLoaded, isSignedIn, user } = useUser();
     let navigate = useNavigate();
 
-  if (!isLoaded) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <p className="text-slate-500">Loading...</p>
-      </div>
-    );
-  }
 
-  if (!isSignedIn || !user) {
-    navigate("/")
-  }
+    useEffect(() => {
+        if (isLoaded && (!isSignedIn || !user)) {
+            navigate("/");
+        }
+    }, [isLoaded, isSignedIn, user, navigate]);
 
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="flex h-screen overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-64 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 md:flex hidden">
-          <div className="flex items-center gap-3 p-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-700 text-white">
-              <span className="material-symbols-outlined">
-                <Wallet/>
-              </span>
-            </div>
-            <div>
-              <h1 className="text-lg font-bold leading-tight tracking-tight">
-                Thea.do
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Student Finance
-              </p>
-            </div>
-          </div>
+     
+        <Navbar/> 
 
-          <nav className="flex-1 space-y-1 px-4 py-4">
-            <a
-              className="flex items-center gap-3 rounded-lg bg-blue-700 px-3 py-2.5 text-white"
-              href="#"
-            >
-              <span className="material-symbols-outlined"> <Home size={25}/> </span>
-              <span className="text-sm font-medium">Home</span>
-            </a>
-            <a
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-              href="#"
-            >
-              <span className="material-symbols-outlined"> <ScrollText/> </span>
-              <span className="text-sm font-medium">Expenses</span>
-            </a>
-            <a
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-              href="#"
-            >
-              <span className="material-symbols-outlined"> <ClockFading/> </span>
-              <span className="text-sm font-medium"> Bill Scheduler </span>
-            </a>
-            <a
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-              href="#"
-            >
-              <span className="material-symbols-outlined"> <Route/> </span>
-              <span className="text-sm font-medium"> FX Routes</span>
-            </a>
 
-          </nav>
-
-          <div className="mt-auto p-4">
-            <div className="rounded-xl bg-blue-700/10 p-4 dark:bg-blue-700/20">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
-                Scholarship Status
-              </p>
-              <p className="mb-3 text-sm text-slate-700 dark:text-slate-300">
-                Next disbursement in 12 days.
-              </p>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                <div className="h-full w-3/4 bg-blue-700" />
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          {/* Header */}
           <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-8 py-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/80">
             <div className="flex items-center gap-4">
               <h2 className="text-xl font-bold">Dashboard Overview</h2>
