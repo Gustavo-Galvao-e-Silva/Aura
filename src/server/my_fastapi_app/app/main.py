@@ -6,6 +6,8 @@ from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from agents.state import AuraState
 from agents.agents import visionary_accountant_node
 
+from agents.aura_graph import aura_graph
+
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 
 # Shared state
@@ -21,9 +23,14 @@ current_state: AuraState = {
 
 async def monitor_market_loop():
     """Background heartbeat for Role 1 & 3"""
+    global current_state
     while True:
-        print("Aura heartbeat: Checking markets...")
+        print("Aura heartbeat: Updating market and routes...")
         # Role 1 will eventually invoke the graph here
+
+        result = aura_graph.invoke(current_state)
+        current_state.update(result)
+
         await asyncio.sleep(60) # Set to 60s for demo/dev
 
 @app.on_event("startup")
