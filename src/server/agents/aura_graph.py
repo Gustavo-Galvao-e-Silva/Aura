@@ -1,6 +1,7 @@
 from langgraph.graph import StateGraph, END
 from agents.state import AuraState
 from agents.agents import fx_strategist_node
+from agents.router import smart_router_node
 
 def build_aura_graph():
     # 1. Initialize the Graph with our State
