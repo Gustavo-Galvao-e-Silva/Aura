@@ -13,7 +13,7 @@ dev:
 	PYTHONPATH=. uvicorn my_fastapi_app.app.main:app --reload
 
 # Enter the Postgres Shell inside Docker
-db-shell:
+db:
 	docker exec -it server-db-1 psql -U postgres
 
 # Test the Vision Agent with an image
