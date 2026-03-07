@@ -1,0 +1,22 @@
+from langgraph.graph import StateGraph, END
+from agents.state import AuraState
+from agents.agents import fx_strategist_node
+
+def build_aura_graph():
+    # 1. Initialize the Graph with our State
+    workflow = StateGraph(AuraState)
+
+    # 2. Add our Nodes
+    workflow.add_node("fx_strategist", fx_strategist_node)
+    
+    # Note: visionary_accountant_node is usually called directly via 
+    # the FastAPI endpoint, but you could add it here too!
+
+    # 3. Define the Flow
+    workflow.set_entry_point("fx_strategist")
+    workflow.add_edge("fx_strategist", END)
+
+    # 4. Compile
+    return workflow.compile()
+
+aura_graph = build_aura_graph()
