@@ -13,6 +13,7 @@ class Liability(Base):
     currency = Column(String(3), default="USD") # Defaulting to USD as discussed
     due_date = Column(Date, nullable=False)
     is_predicted = Column(Boolean, default=False) # Distinguish between real OCR and AI inference
+    is_paid = Column(Boolean, default=False)
     category = Column(String, nullable=True)      # Tuition, Rent, etc.
     priority_level = Column(Integer, default=2)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

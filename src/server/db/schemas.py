@@ -9,6 +9,7 @@ class FinancialResponsibility(BaseModel):
     due_date: date
     category: Optional[str] = "Other"
     priority_level: int = 2
+    is_paid: bool = False
 
     @field_validator('currency')
     @classmethod
