@@ -5,7 +5,6 @@ pandas
 openai
 plaid-python
 twilio
-
 fastapi
 uvicorn[standard]
 langgraph
@@ -14,3 +13,4 @@ google-generativeai
 Pillow
 requests
 python-dotenv
+python-multiparts
