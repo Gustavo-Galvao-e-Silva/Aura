@@ -27,3 +27,6 @@ upload file:
 # View the status of all current liabilities
 status:
 	curl -s http://localhost:8000/status | jq .
+
+pip:
+	pip install -r requirements.txt
