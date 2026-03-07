@@ -9,7 +9,7 @@ from PIL import Image
 from agents.state import AuraState
 from agents.prompts import visionary_accountant_prompt
 
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def fx_strategist_node(state: AuraState):
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
