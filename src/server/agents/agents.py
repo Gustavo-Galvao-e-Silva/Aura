@@ -34,7 +34,7 @@ def fx_strategist_node(state: AuraState):
 
 def visionary_accountant_node(image_bytes: bytes, history_context: str = "No history available."):
     model = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=[
             get_visionary_accountant_prompt(history_context),
             Image.open(io.BytesIO(image_bytes))
