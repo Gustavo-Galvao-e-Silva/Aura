@@ -29,28 +29,26 @@ Output Requirements:
 Your response must be a structured state update including market_sentiment, recommended_action, and logic_justification.
 """
 
-visionary_accountant_prompt = """
-You are the Aura Visionary Accountant, an expert in global financial document analysis. 
-Your task is to extract critical data from the provided image of an invoice, bill, or financial document.
+def get_visionary_accountant_prompt(history_context: str):
+    return f"""
+You are the Aura Visionary Accountant. Your goal is to maintain a perfect Liability Ledger for an international student.
 
-Analyze the document and extract the following fields in a strict JSON format:
-1. biller_name: The company or entity issuing the bill.
-2. amount_due: The numerical value of the debt.
-3. currency: The 3-letter currency code (e.g., USD, BRL, EUR).
-4. due_date: The deadline for payment in YYYY-MM-DD format.
-5. category: One of [Tuition, Rent, Utilities, Insurance, Other].
-6. priority_level: 1 (Critical/Life-impacting) or 2 (Standard/Subscription).
+IMAGE INPUT: An image of a new financial document (invoice/bill).
+DATABASE CONTEXT (Past Responsibilities): 
+{history_context}
 
-If a field is missing, use "null". 
-If the document is in a foreign language (like Portuguese), translate the labels but keep the original values for names.
+TASK:
+1. Extract the 'actual_liability' from the provided image.
+2. Analyze the DATABASE CONTEXT to see if this is a recurring bill or if other bills are missing.
+3. Generate 'predicted_liabilities' for the next 3 months based on recurring patterns found in history or common student expenses.
 
-Example Output:
-{
-  "biller_name": "University of South Florida",
-  "amount_due": 12500.00,
-  "currency": "USD",
-  "due_date": "2026-08-15",
-  "category": "Tuition",
-  "priority_level": 1
-}
+OUTPUT SCHEMA (Strict JSON):
+{{
+  "actual_liabilities": [
+    {{ "name": "Biller", "amount": 0.0, "currency": "USD", "due_date": "YYYY-MM-DD", "category": "Rent", "priority_level": 1 }}
+  ],
+  "predicted_liabilities": [
+    {{ "name": "Biller", "amount": 0.0, "currency": "USD", "due_date": "YYYY-MM-DD", "category": "Rent", "priority_level": 2 }}
+  ]
+}}
 """

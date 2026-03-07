@@ -1,10 +1,17 @@
 import asyncio
 import os
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends
 
 # Fixed absolute imports
 from agents.state import AuraState
 from agents.agents import visionary_accountant_node
+
+from agents.aura_graph import aura_graph
+
+from sqlalchemy.orm import Session
+
+from db.models import Base, Liability
+from my_fastapi_app.app.db.session import engine, get_db
 
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 
@@ -21,13 +28,19 @@ current_state: AuraState = {
 
 async def monitor_market_loop():
     """Background heartbeat for Role 1 & 3"""
+    global current_state
     while True:
-        print("Aura heartbeat: Checking markets...")
+        print("Aura heartbeat: Updating market and routes...")
         # Role 1 will eventually invoke the graph here
+
+        result = aura_graph.invoke(current_state)
+        current_state.update(result)
+
         await asyncio.sleep(60) # Set to 60s for demo/dev
 
 @app.on_event("startup")
 async def startup_event():
+    Base.metadata.create_all(bind=engine) 
     asyncio.create_task(monitor_market_loop())
 
 @app.get("/status")
@@ -35,13 +48,31 @@ async def get_status():
     return current_state
 
 @app.post("/upload-invoice")
-async def upload_invoice(file: UploadFile = File(...)):
-    """Role 2 Entry Point"""
+async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get_db)):
     image_bytes = await file.read()
-    new_liability = visionary_accountant_node(image_bytes)
-
-    if new_liability:
-        current_state["pending_liabilities"].append(new_liability)
-        return {"status": "success", "data": new_liability}
     
-    return {"status": "error", "message": "Extraction failed"}
+    # 1. Fetch history from DB to provide context
+    past_liabilities = db.query(Liability).limit(10).all()
+    history_str = "\n".join([f"{l.name}: ${l.amount} due {l.due_date}" for l in past_liabilities])
+
+    # 2. Run Vision Agent with History Context
+    extraction_result = visionary_accountant_node(image_bytes, history_context=history_str)
+    
+    if not extraction_result:
+        return {"status": "error", "message": "Extraction failed"}
+
+    # 3. Save Actual Liabilities
+    for item in extraction_result.get("actual_liabilities", []):
+        db.add(Liability(**item, is_predicted=False))
+        
+    # 4. Save Predicted Liabilities (The intelligent inference)
+    for item in extraction_result.get("predicted_liabilities", []):
+        db.add(Liability(**item, is_predicted=True))
+        
+    db.commit()
+    
+    return {
+        "status": "success", 
+        "actual_count": len(extraction_result.get("actual_liabilities", [])),
+        "predicted_count": len(extraction_result.get("predicted_liabilities", []))
+    }

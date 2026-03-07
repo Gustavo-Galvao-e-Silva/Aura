@@ -2,14 +2,15 @@ import os
 import io
 import json
 import requests
-import google.generativeai as genai
+from google import genai
 from PIL import Image
 
 # Use absolute imports from the server root
 from agents.state import AuraState
-from agents.prompts import visionary_accountant_prompt
 
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+from agents.prompts import get_visionary_accountant_prompt
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def fx_strategist_node(state: AuraState):
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
@@ -31,18 +32,20 @@ def fx_strategist_node(state: AuraState):
         "market_prediction": prediction
     }
 
-def visionary_accountant_node(image_bytes: bytes):
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    img = Image.open(io.BytesIO(image_bytes))
-    response = model.generate_content([visionary_accountant_prompt, img])
-
+def visionary_accountant_node(image_bytes: bytes, history_context: str = "No history available."):
+    model = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            get_visionary_accountant_prompt(history_context),
+            Image.open(io.BytesIO(image_bytes))
+        ]
+    )
+    
     try:
-        # Robust JSON cleaning
-        text = response.text
+        text = model.text
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
-        liability = json.loads(text.strip())
-        return liability
+        return json.loads(text.strip())
     except Exception as e:
-        print(f"Vision Parsing Error: {e}")
+        print(f"Visionary Accountant Error: {e}")
         return None
