@@ -17,3 +17,4 @@ python-multipart
 SQLAlchemy
 psycopg2-binary
 browser-use
+playwright
