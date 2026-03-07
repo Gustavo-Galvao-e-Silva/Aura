@@ -42,3 +42,20 @@ async def get_status():
 async def upload_invoice(file_data: dict):
     # Role 2: This is where you'll trigger the Visionary Accountant
     return {"message": "Invoice received and being processed by Visionary Accountant"}
+
+from fastapi import UploadFile, File
+from agents.agents import visionary_accountant_node
+
+@app.post("/upload-invoice")
+async def upload_invoice(file: UploadFile = File(...)):
+    # Read the file bytes
+    image_bytes = await file.read()
+    
+    # Process with the Visionary Accountant
+    new_liability = visionary_accountant_node(image_bytes)
+    
+    if new_liability:
+        current_state["pending_liabilities"].append(new_liability)
+        return {"status": "success", "extracted_data": new_liability}
+    
+    return {"status": "error", "message": "Failed to extract data"}
