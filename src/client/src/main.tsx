@@ -1,11 +1,12 @@
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
-import { ClerkProvider } from "@clerk/react-router";
-
+import {ClerkProvider, Show, RedirectToSignIn } from "@clerk/react-router";
 import "./index.css";
 import FinGlobalLandingPage from "./pages/LandingPage";
 import FinGlobalLoginPage from "./pages/Login";
 import FinGlobalRegisterPage from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import ExpensesPage from "./pages/Expenses";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -26,7 +27,26 @@ ReactDOM.createRoot(root).render(
         <Route path="/" element={<FinGlobalLandingPage />} />
         <Route path="/register" element={<FinGlobalRegisterPage />} />
         <Route path="/login" element={<FinGlobalLoginPage />} />
-      </Routes>
+
+        <Route
+          path="/dashboard"
+          element={
+            <Show when="signed-in" fallback={<RedirectToSignIn />}>
+              <Dashboard />
+            </Show>
+          }
+        />
+
+        <Route
+          path="/expenses"
+          element={
+            <Show when="signed-in" fallback={<RedirectToSignIn />}>
+              <ExpensesPage/>
+            </Show>
+          }
+        />
+
+      </Routes>      
     </ClerkProvider>
   </BrowserRouter>
 );

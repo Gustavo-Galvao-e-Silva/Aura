@@ -1,0 +1,141 @@
+import { Upload } from "lucide-react";
+
+export default function AddExpensesModal(props: {CloseModal: () => void}){
+
+    return (
+
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+            <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
+                <div className="flex items-center justify-between border-b border-slate-100 p-6 dark:border-slate-800">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                    Add New Expense
+                </h3>
+                <button className="text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200">
+                    <span className="material-symbols-outlined">close</span>
+                </button>
+                </div>
+
+
+                <div className="overflow-y-auto p-8">
+                <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
+                    <div className="flex flex-col">
+                        <label className="mb-4 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                            Upload Receipt/Invoice
+                    </label>
+
+                    <label
+                        htmlFor="expense-file"
+                        className="group flex flex-1 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-blue-700/20 bg-blue-700/5 p-8 text-center transition-all hover:border-blue-700/40"
+                    >
+                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-700/10 text-blue-700 transition-transform group-hover:scale-110">
+                        <Upload className="h-8 w-8" />
+                        </div>
+
+                        <p className="mb-1 font-bold text-slate-900 dark:text-white">
+                        Drop your file here or click to browse
+                        </p>
+                        <p className="text-xs text-slate-500">
+                        Supported formats: PDF, JPG, PNG (Max 5MB)
+                        </p>
+                    </label>
+
+                    <input
+                        id="expense-file"
+                        className="hidden"
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                    />
+                    </div>
+
+                    {/* Right Column: Manual Entry */}
+                    <div className="space-y-4">
+                    <label className="mb-0 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                        Manual Entry
+                    </label>
+
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">
+                        Expense Name
+                        </label>
+                        <input
+                        className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                        placeholder="e.g. Tuition Fees, Rent"
+                        type="text"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">
+                            Amount
+                        </label>
+                        <input
+                            className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                            placeholder="0.00"
+                            type="number"
+                        />
+                        </div>
+
+                        <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">
+                            Currency
+                        </label>
+                        <select className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800">
+                            <option>USD ($)</option>
+                            <option>BRL (R$)</option>
+                        </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">
+                            Due Date
+                        </label>
+                        <input
+                            className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm text-slate-500 focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                            type="date"
+                        />
+                        </div>
+
+                        <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">
+                            Category
+                        </label>
+                        <select className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800">
+                            <option>Education</option>
+                            <option>Housing</option>
+                            <option>Food</option>
+                            <option>Transport</option>
+                            <option>Health</option>
+                            <option>Other</option>
+                        </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-500">
+                        Notes (Optional)
+                        </label>
+                        <textarea
+                        className="h-24 w-full resize-none rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                        placeholder="Add any extra details..."
+                        />
+                    </div>
+                    </div>
+                </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/50 p-6 dark:border-slate-800 dark:bg-slate-800/30">
+                <button onClick={() => props.CloseModal()} className="px-6 py-2.5 text-sm font-bold text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                    Cancel
+                </button>
+                <button className="rounded-xl bg-blue-700 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-700/25 transition-all hover:opacity-90 active:scale-95">
+                    Add Expense
+                </button>
+                </div>
+            </div>
+        </div>
+        )
+}
