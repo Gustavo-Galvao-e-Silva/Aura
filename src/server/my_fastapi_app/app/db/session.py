@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_client
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # Uses the credentials from your docker-compose
