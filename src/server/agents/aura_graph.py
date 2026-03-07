@@ -16,7 +16,7 @@ def build_aura_graph():
 
     # 3. Define the Flow
     workflow.set_entry_point("fx_strategist")
-    workflow.add_edge("check_market", "find_route")
+    workflow.add_edge("fx_strategist", "find_route")
     workflow.add_edge("fx_strategist", END)
 
     # 4. Compile
