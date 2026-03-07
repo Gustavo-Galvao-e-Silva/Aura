@@ -2,7 +2,7 @@ import os
 import io
 import json
 import requests
-import google.generativeai as genai
+import google import genai
 from PIL import Image
 
 # Use absolute imports from the server root
