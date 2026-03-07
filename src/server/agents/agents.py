@@ -14,21 +14,38 @@ client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def fx_strategist_node(state: AuraState):
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
-    url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=BRL&to_currency=USD&apikey={api_key}"
-
+    
+    # 1. Fetch Real-time Exchange Rate
+    rate_url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=BRL&to_currency=USD&apikey={api_key}"
+    
+    # 2. Fetch RSI Technical Indicator (14-day window)
+    rsi_url = f"https://www.alphavantage.co/query?function=RSI&symbol=BRLUSD&interval=daily&time_period=14&series_type=close&apikey={api_key}"
+    
     try:
-        response = requests.get(url).json()
-        data = response.get("Realtime Currency Exchange Rate", {})
-        rate = float(data.get("5. Exchange Rate", 0.0))
+        rate_res = requests.get(rate_url).json()
+        current_rate = float(rate_res["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
+        
+        rsi_res = requests.get(rsi_url).json()
+        time_series = rsi_res.get("Technical Analysis: RSI", {})
+        latest_date = list(time_series.keys())[0]
+        rsi_value = float(time_series[latest_date]["RSI"])
     except Exception as e:
-        print(f"FX API Error: {e}")
-        rate = state.get("current_fx_rate", 0.0)
+        print(f"FX Strategist Error: {e}. Using fallback values.")
+        current_rate = state.get("current_fx_rate", 0.18)
+        rsi_value = 50.0  # Neutral
 
-    # Simplified logic for hackathon POC
-    prediction = "BUY" if rate < 0.18 else "WAIT" 
+    # Logic based on Manifesto 2.0
+    if rsi_value < 30:
+        prediction = "STRONG_BUY" # Golden Opportunity
+    elif rsi_value < 45:
+        prediction = "BUY"
+    else:
+        prediction = "WAIT"
+
+    print(f"📈 FX Analysis: Rate={current_rate}, RSI={rsi_value}, Signal={prediction}")
 
     return {
-        "current_fx_rate": rate,
+        "current_fx_rate": current_rate,
         "market_prediction": prediction
     }
 
