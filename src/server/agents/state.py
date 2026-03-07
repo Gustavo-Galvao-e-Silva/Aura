@@ -1,12 +1,15 @@
-from typing import TypedDict, List, Annotated
-import operator
+from typing import TypedDict, List, Optional
 
 class AuraState(TypedDict):
-    # The 'Memory' of the system
-    raw_invoice_data: dict
-    pending_liabilities: List[dict]
+    # Current financial snapshot
+    brl_balance: float
+    usd_balance: float
     current_fx_rate: float
-    market_prediction: str  # 'BULLISH', 'BEARISH', 'NEUTRAL'
-    optimal_route: dict
-    user_confirmed: bool
-    audit_hash: str
+    
+    # Intelligence data
+    pending_liabilities: List[dict]  # From Visionary Accountant
+    market_prediction: str           # From FX Strategist ('BUY', 'WAIT')
+    
+    # Execution data
+    selected_route: Optional[dict]   # From Smart Router
+    audit_hash: Optional[str]        # From Trust Engine
