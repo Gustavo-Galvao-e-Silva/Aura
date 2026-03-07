@@ -8,6 +8,9 @@ from agents.agents import visionary_accountant_node
 
 from agents.aura_graph import aura_graph
 
+from db.session import engine
+from db.models import Base
+
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 
 # Shared state
@@ -35,6 +38,7 @@ async def monitor_market_loop():
 
 @app.on_event("startup")
 async def startup_event():
+    Base.metadata.create_all(bind=engine) 
     asyncio.create_task(monitor_market_loop())
 
 @app.get("/status")
@@ -52,3 +56,4 @@ async def upload_invoice(file: UploadFile = File(...)):
         return {"status": "success", "data": new_liability}
     
     return {"status": "error", "message": "Extraction failed"}
+
