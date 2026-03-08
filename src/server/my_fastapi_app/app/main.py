@@ -11,8 +11,9 @@ from agents.agents import visionary_accountant_node
 from agents.aura_graph import aura_graph
 
 from sqlalchemy.orm import Session
+from sqlalchemy import or_ # Add this import at the top
 
-from db.models import Base, CotationNotify, Liability, Users
+from db.models import Base, CotationNotify, Liability, Users, AuditLog
 from my_fastapi_app.app.db.session import engine, get_db
 
 from datetime import date, timedelta
@@ -455,4 +456,36 @@ async def update_expense(
     return {
         "count": count,
         "next_liability": next_liability
+
+@app.get("/verify-reasoning/{identifier}")
+async def verify_reasoning(identifier: str, db: Session = Depends(get_db)):
+    """
+    Flexible Verification: 
+    Lookup by either the Audit Hash (data) or Stellar TX ID (ledger).
+    """
+    # Search for the identifier in BOTH the decision_hash and stellar_tx_id columns
+    log_entry = db.query(AuditLog).filter(
+        or_(
+            AuditLog.decision_hash == identifier,
+            AuditLog.stellar_tx_id == identifier
+        )
+    ).first()
+    
+    if not log_entry:
+        raise HTTPException(
+            status_code=404, 
+            detail="Audit trail not found. Ensure you are using a valid Hash or Transaction ID."
+        )
+
+    # Always prefer the real Stellar TX ID for the link if it exists
+    link_id = log_entry.stellar_tx_id or log_entry.decision_hash
+    
+    return {
+        "status": "Verified",
+        "timestamp": log_entry.timestamp,
+        "reasoning": log_entry.reasoning,
+        "audit_hash": log_entry.decision_hash,
+        "stellar_tx_id": log_entry.stellar_tx_id,
+        "ledger_url": f"https://stellar.expert/explorer/testnet/tx/{link_id}",
+        "message": "This decision is cryptographically locked on the Stellar Public Ledger."
     }
