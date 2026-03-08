@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session
 import os
 import httpx
 
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 

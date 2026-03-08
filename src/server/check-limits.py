@@ -2,6 +2,9 @@ import os
 import requests
 import json
 
+from dotenv import load_dotenv
+load_dotenv()
+
 def check_limits():
     api_key = os.getenv("GOOGLE_API_KEY")
     # Testing the three main tiers you have access to
