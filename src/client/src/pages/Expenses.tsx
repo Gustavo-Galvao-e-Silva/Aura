@@ -6,6 +6,7 @@ import Modal from "../components/Modal";
 import AddExpensesModal from "../components/AddExpensesModal";
 import apiClient from "../API/client";
 import { getExpenseStats } from "../API/ExpensesClient";
+import { useUser } from "@clerk/react-router";
 
 type Liability = {
   id: number;
@@ -33,30 +34,36 @@ export default function ExpensesPage() {
     upcoming_total: 0,
     overdue_total: 0,
   });
+  const { isLoaded, isSignedIn, user } = useUser();
 
-  useEffect(() => {
-    async function loadPageData() {
-      try {
-        setLoading(true);
+useEffect(() => {
+  if (!user?.username) return;
 
-        const [expensesResponse, statsResponse] = await Promise.all([
-          apiClient.get("/get-user-expenses", {
-            params: { filter_by: selectedFilter },
-          }),
-          getExpenseStats(),
-        ]);
+  async function loadPageData() {
+    try {
+      setLoading(true);
 
-        setExpenses(expensesResponse.data["user-expenses"] ?? []);
-        setStats(statsResponse);
-      } catch (error) {
-        console.error("Failed to fetch expenses:", error);
-      } finally {
-        setLoading(false);
-      }
+      const [expensesResponse, statsResponse] = await Promise.all([
+        apiClient.get("/get-user-expenses", {
+          params: {
+            username: user?.username,
+            filter_by: selectedFilter,
+          },
+        }),
+        getExpenseStats(user!.username!),
+      ]);
+
+      setExpenses(expensesResponse.data["user-expenses"] ?? []);
+      setStats(statsResponse);
+    } catch (error) {
+      console.error("Failed to fetch expenses:", error);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    loadPageData();
-  }, [selectedFilter]);
+  loadPageData();
+}, [selectedFilter, user?.username]);
 
   function getTabClass(filter: ExpenseFilter) {
     const isActive = selectedFilter === filter;
@@ -69,7 +76,7 @@ export default function ExpensesPage() {
   function formatBRL(value: number) {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
-      currency: "BRL",
+      currency: "USD",
     }).format(value);
   }
 

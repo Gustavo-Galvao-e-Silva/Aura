@@ -31,20 +31,7 @@ export default function Navbar(){
               
 
             </nav>
-
-            <div className="mt-auto p-4">
-                <div className="rounded-xl bg-blue-700/10 p-4 dark:bg-blue-700/20">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
-                    Scholarship Status
-                </p>
-                <p className="mb-3 text-sm text-slate-700 dark:text-slate-300">
-                    Next disbursement in 12 days.
-                </p>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                    <div className="h-full w-3/4 bg-blue-700" />
-                </div>
-                </div>
-            </div>
+            
             </aside>
     )
 }
