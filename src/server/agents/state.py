@@ -12,5 +12,8 @@ class AuraState(TypedDict):
     
     # Execution data
     route_options: List[dict]
-    selected_route: Optional[dict]   # From Smart Router
+    selected_route: Optional[str]   # From Smart Router
     audit_hash: Optional[str]        # From Trust Engine
+    
+    # List of {id, name, pay: bool, reason: str}
+    payment_decisions: List[dict]

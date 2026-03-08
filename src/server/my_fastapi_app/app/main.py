@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session
 import os
 import httpx
 
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 
@@ -59,6 +61,8 @@ app.add_middleware(
 )
 
 current_state: AuraState = {
+    "payment_decisions": [],
+    "route_options": [],
     "brl_balance": 50000.0,
     "usd_balance": 0.0,
     "current_fx_rate": 0.0,
@@ -191,28 +195,6 @@ async def post_create_user(
     db.refresh(new_user)
 
     return new_user
-
-@app.post("/create-expense")
-async def post_create_expense(
-    data: CreateExpenseDTO,
-    db: Session = Depends(get_db),
-):
-    new_liability = Liability(
-        username=data.username,
-        name=data.name,
-        amount=data.amount,
-        currency=data.currency,
-        due_date=data.due_date,
-        category=data.category,
-        is_predicted=False,
-        is_paid=False,
-    )
-
-    db.add(new_liability)
-    db.commit()
-    db.refresh(new_liability)
-
-    return new_liability
 
 @app.get("/get-expense-stats")
 async def get_expense_stats(
@@ -402,7 +384,6 @@ async def get_fx_provider_rates():
 
     return parsed
 
-
 @app.post("/set-quote-alert")
 async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
 
@@ -415,6 +396,3 @@ async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
     db.add(target_quote)
     db.commit()
     db.refresh(target_quote)
-
-
- 

@@ -1,22 +1,70 @@
 import hashlib
 import json
+import os
+from stellar_sdk import Server, Keypair, TransactionBuilder, Network
 from agents.state import AuraState
+
+from dotenv import load_dotenv
+load_dotenv()
 
 def trust_engine_node(state: AuraState):
     """
-    Role 3: Creates a 'Proof of Reason' by hashing the current decision.
+    Role 3: The Trust Engine.
+    Creates a 'Proof of Reason' by hashing decisions and posting to the Stellar Ledger.
     """
-    # Create a unique string of the current decision data
-    decision_data = {
-        "rate": state.get("current_fx_rate"),
-        "prediction": state.get("market_prediction"),
-        "route": state.get("selected_route")
+    # 1. Create the Audit Payload (The "Proof of Reason")
+    # We hash the market signal, the routing facts, and the specific decisions
+    decision_payload = {
+        "market_prediction": state.get("market_prediction"),
+        "current_fx_rate": state.get("current_fx_rate"),
+        "reasoning_sent": state.get("selected_route"),
+        "structured_decisions": state.get("payment_decisions")
     }
+    
+    # Generate the SHA-256 hash
+    dumped_data = json.dumps(decision_payload, sort_keys=True)
+    audit_hash = hashlib.sha256(dumped_data.encode()).hexdigest()
+    
+    print(f"🔐 Local Audit Hash generated: {audit_hash}")
 
-    decision_str = json.dumps(decision_data, sort_keys=True)
+    # 2. Submit to Stellar Testnet
+    # This records the hash on a public ledger so it can't be changed later.
+    secret_key = os.getenv("STELLAR_SECRET_KEY")
+    
+    if not secret_key:
+        print("⚠️ STELLAR_SECRET_KEY missing in .env. Skipping blockchain submission.")
+        return {"audit_hash": audit_hash}
 
-    # Generate an SHA-256 hash (Simulating a Blockchain transaction hash)
-    audit_hash = hashlib.sha256(decision_str.encode()).hexdigest()
+    try:
+        # Connect to Testnet
+        server = Server("https://horizon-testnet.stellar.org")
+        source_keypair = Keypair.from_secret(secret_key)
+        source_account = server.load_account(source_keypair.public_key)
 
-    print(f"Audit Trail Generated: {audit_hash}")
+        # Build transaction: Sending 0.00001 XLM to self just to record the MEMO (the hash)
+        transaction = (
+            TransactionBuilder(
+                source_account=source_account,
+                network_passphrase=Network.TESTNET_NETWORK_PASSPHRASE,
+                base_fee=100,
+            )
+            .add_hash_memo(bytes.fromhex(audit_hash)) # Store the full 32-byte hash
+            .append_payment_op(
+                destination=source_keypair.public_key, 
+                amount="0.00001", 
+                asset_code="XLM"
+            )
+            .set_timeout(30)
+            .build()
+        )
+
+        transaction.sign(source_keypair)
+        response = server.submit_transaction(transaction)
+        
+        ledger_url = f"https://stellar.expert/explorer/testnet/tx/{response['hash']}"
+        print(f"🚀 Proof of Reason stored on Ledger: {ledger_url}")
+        
+    except Exception as e:
+        print(f"⚠️ Stellar Submission Failed: {e}")
+
     return {"audit_hash": audit_hash}
