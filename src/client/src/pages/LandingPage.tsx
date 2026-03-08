@@ -7,12 +7,12 @@ export default function FinGlobalLandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-blue-700 rounded-lg text-white">
-                <span className="material-symbols-outlined block">
-                  <Wallet/>
-                </span>
-              </div>
-              <span className="text-xl font-bold tracking-tight"> Thea.do </span>
+              <div className="p-1.5  rounded-lg text-white">
+                  <span className="material-symbols-outlined block">
+                    <img className="w-[70px] h-[60px]" src="Untitled(1).png"/> 
+                  </span>
+                </div>
+              <span className="text-xl font-bold tracking-tight"> Revellio </span>
             </div>
 
             <nav className="hidden md:flex space-x-8 items-center">
@@ -28,18 +28,12 @@ export default function FinGlobalLandingPage() {
               >
                 Solutions
               </a>
-              <a
-                className="text-sm font-medium hover:text-blue-700 transition-colors"
-                href="#pricing"
-              >
-                Pricing
-              </a>
               <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-2" />
               <a href="/login" className="text-sm font-semibold hover:text-blue-700 transition-colors">
                 Log In
               </a>
 
-              <a className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all shadow-sm">
+              <a href={"/login"} className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all shadow-sm">
                 Get Started
               </a>
             </nav>
@@ -80,10 +74,7 @@ export default function FinGlobalLandingPage() {
 
                 <div className="flex flex-col sm:flex-row gap-4">
                   <button className="bg-blue-700 hover:bg-blue-800 text-white px-8 py-4 rounded-xl text-lg font-bold transition-all shadow-lg shadow-blue-700/25">
-                    Start Free Trial
-                  </button>
-                  <button className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-8 py-4 rounded-xl text-lg font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
-                    Watch Demo
+                    Get Started
                   </button>
                 </div>
               </div>
@@ -98,7 +89,7 @@ export default function FinGlobalLandingPage() {
                       <div className="w-3 h-3 rounded-full bg-emerald-400" />
                     </div>
                     <div className="text-xs font-mono text-slate-400">
-                      dashboard.finglobal.com
+                      dashboard.revellio.com
                     </div>
                   </div>
 
@@ -120,11 +111,10 @@ export default function FinGlobalLandingPage() {
                 Key Features
               </h2>
               <p className="text-4xl font-black text-slate-900 dark:text-white mb-6">
-                Powerful tools to manage your global wealth
+                Smart tools built for international student finances
               </p>
               <p className="text-lg text-slate-600 dark:text-slate-400">
-                Our suite of features is designed to give you complete control
-                over your international finances with zero stress.
+                Revellio brings expense tracking, bill scheduling, FX monitoring, and quote alerts together so students can manage cross-border money with more clarity and less stress.
               </p>
             </div>
 
@@ -189,16 +179,10 @@ export default function FinGlobalLandingPage() {
                   and worrying less about their global money transfers.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <button className="bg-blue-700 hover:bg-blue-800 text-white px-10 py-4 rounded-xl text-lg font-bold transition-all shadow-lg shadow-blue-700/20">
+                  <a href="/login"  className="bg-blue-700 hover:bg-blue-800 text-white px-10 py-4 rounded-xl text-lg font-bold transition-all shadow-lg shadow-blue-700/20">
                     Get Started Now
-                  </button>
-                  <button className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-10 py-4 rounded-xl text-lg font-bold transition-all backdrop-blur-sm">
-                    Talk to Sales
-                  </button>
+                  </a>
                 </div>
-                <p className="mt-8 text-sm text-slate-400">
-                  No credit card required. Free 14-day trial.
-                </p>
               </div>
             </div>
           </div>
@@ -210,19 +194,18 @@ export default function FinGlobalLandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-16">
             <div className="col-span-2 lg:col-span-2">
               <div className="flex items-center gap-2 mb-6">
-                <div className="p-1.5 bg-blue-700 rounded-lg text-white">
+                <div className="p-1.5  rounded-lg text-white">
                   <span className="material-symbols-outlined block">
-                    <Wallet/>
+                    <img className="w-[70px] h-[60px]" src="Untitled(1).png"/> 
                   </span>
                 </div>
                 <span className="text-xl font-bold tracking-tight">
-                  FinGlobal
+                  Revellio
                 </span>
               </div>
 
               <p className="text-slate-500 dark:text-slate-400 max-w-sm mb-6">
-                A smarter platform for international students managing tuition,
-                rent, and cross-border transfers.
+                Plan tuition, rent, groceries, and cross-border payments in one place. Aura helps international students time conversions, track expenses, and reduce the cost of everyday life with less stress.
               </p>
 
               <div className="flex gap-4">
@@ -237,101 +220,10 @@ export default function FinGlobalLandingPage() {
               </div>
             </div>
 
-            <div>
-              <h5 className="font-bold mb-6">Product</h5>
-              <ul className="space-y-4 text-sm text-slate-500 dark:text-slate-400">
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Features
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Pricing
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Security
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Roadmap
-                  </a>
-                </li>
-              </ul>
-            </div>
 
-            <div>
-              <h5 className="font-bold mb-6">Company</h5>
-              <ul className="space-y-4 text-sm text-slate-500 dark:text-slate-400">
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    About
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Careers
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Press
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Contact
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h5 className="font-bold mb-6">Legal</h5>
-              <ul className="space-y-4 text-sm text-slate-500 dark:text-slate-400">
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Privacy
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Terms
-                  </a>
-                </li>
-                <li>
-                  <a className="hover:text-blue-700 transition-colors" href="#">
-                    Compliance
-                  </a>
-                </li>
-              </ul>
-            </div>
           </div>
 
-          <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-slate-500">
-              © 2024 FinGlobal Inc. All rights reserved.
-            </p>
-
-            <div className="flex gap-8 text-sm text-slate-500">
-              <span className="flex items-center gap-1 cursor-pointer hover:text-blue-700 transition-colors">
-                <span className="material-symbols-outlined text-base">
-                  language
-                </span>
-                English
-              </span>
-              <span className="flex items-center gap-1 cursor-pointer hover:text-blue-700 transition-colors">
-                <span className="material-symbols-outlined text-base">
-                  verified_user
-                </span>
-                System Status
-              </span>
-            </div>
-          </div>
-        </div>
+         </div>
       </footer>
     </div>
   );

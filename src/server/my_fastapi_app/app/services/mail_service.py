@@ -29,7 +29,7 @@ Best provider right now: {provider}
 
 This means the quotation is now at or below the threshold you requested.
 
-- Thea.do
+- Revellio
 """.strip()
 
     msg = MIMEMultipart()
