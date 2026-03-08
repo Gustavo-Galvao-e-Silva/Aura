@@ -9,8 +9,10 @@ from agents.state import AuraState
 from agents.prompts import get_visionary_accountant_prompt
 
 from datetime import datetime, timedelta
-
-CACHE_EXPIRY_MINUTES = 60
+# --- CACHE CONFIGURATION ---
+# We store the last update time in memory to stay under the 20 RPD limit.
+# For a 20 RPD limit (with 2 calls per pass), 120 minutes is a safe interval.
+CACHE_EXPIRY_MINUTES = 120 
 last_fx_data = None
 last_fx_update = None
 
