@@ -439,3 +439,20 @@ async def update_expense(
         "status": "success",
         "expense": expense,
     }
+
+@app.get("/dashboard-expenses")
+async def update_expense(
+    username: str | None = Query(None),
+    db: Session = Depends(get_db)
+):
+    
+    count = db.query(Liability).filter(Liability.is_predicted == False, Liability.username == username).count()
+    next_liability = db.query(Liability).filter(     
+            Liability.is_predicted == False,
+            Liability.username == username,
+            Liability.is_paid == False).order_by(Liability.due_date).first()
+
+    return {
+        "count": count,
+        "next_liability": next_liability
+    }

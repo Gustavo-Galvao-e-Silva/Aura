@@ -27,6 +27,11 @@ type Liability = {
   created_at: string;
 };
 
+type DashboardExpensesResponse = {
+  count: number;
+  next_liability: Liability | null;
+};
+
 type FrankfurterTimeSeries = {
   base: string;
   start_date: string;
@@ -49,6 +54,10 @@ export default function Dashboard() {
   const [upcomingExpenses, setUpcomingExpenses] = useState<Liability[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
 
+  const [dashboardSummary, setDashboardSummary] =
+    useState<DashboardExpensesResponse | null>(null);
+  const [dashboardSummaryLoading, setDashboardSummaryLoading] = useState(true);
+
   const [fxSeries, setFxSeries] = useState<{ date: string; value: number }[]>([]);
   const [latestRate, setLatestRate] = useState<number | null>(null);
   const [fxLoading, setFxLoading] = useState(true);
@@ -65,8 +74,31 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user?.username) return;
 
-    async function fetchUpcomingExpenses() {
+    async function fetchDashboardSummary() {
+      try {
+        setDashboardSummaryLoading(true);
 
+        const response = await apiClient.get("/dashboard-expenses", {
+          params: {
+            username: user!.username,
+          },
+        });
+
+        setDashboardSummary(response.data);
+      } catch (error) {
+        console.error("Failed to fetch dashboard summary:", error);
+      } finally {
+        setDashboardSummaryLoading(false);
+      }
+    }
+
+    fetchDashboardSummary();
+  }, [isLoaded, isSignedIn, user?.username]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user?.username) return;
+
+    async function fetchUpcomingExpenses() {
       try {
         setExpensesLoading(true);
 
@@ -74,7 +106,7 @@ export default function Dashboard() {
           params: {
             filter_by: "upcoming",
             limit: 3,
-            username: user?.username,
+            username: user!.username,
           },
         });
 
@@ -87,7 +119,7 @@ export default function Dashboard() {
     }
 
     fetchUpcomingExpenses();
-  }, [isLoaded, isSignedIn, user]);
+  }, [isLoaded, isSignedIn, user?.username]);
 
   useEffect(() => {
     async function fetchFxData() {
@@ -129,49 +161,49 @@ export default function Dashboard() {
   }, []);
 
   async function handleSubmitQuoteAlert() {
-  if (!user?.username) {
-    alert("No username found.");
-    return;
+    if (!user?.username) {
+      alert("No username found.");
+      return;
+    }
+
+    const parsedQuote = Number(targetQuote);
+
+    if (!targetQuote || Number.isNaN(parsedQuote) || parsedQuote <= 0) {
+      alert("Please enter a valid quotation.");
+      return;
+    }
+
+    const email =
+      user.primaryEmailAddress?.emailAddress ??
+      user.emailAddresses?.[0]?.emailAddress ??
+      null;
+
+    if (!email) {
+      alert("No email found for this account.");
+      return;
+    }
+
+    try {
+      setIsSubmittingQuote(true);
+
+      const response = await apiClient.post("/set-quote-alert", {
+        username: user.username,
+        email,
+        target_rate: parsedQuote,
+      });
+
+      console.log("Quote alert saved:", response.data);
+      alert("Quotation alert saved.");
+      setTargetQuote("");
+    } catch (error: any) {
+      console.error("Failed to save quotation alert:", error);
+      alert(
+        JSON.stringify(error?.response?.data ?? error?.message ?? error, null, 2)
+      );
+    } finally {
+      setIsSubmittingQuote(false);
+    }
   }
-
-  const parsedQuote = Number(targetQuote);
-
-  if (!targetQuote || Number.isNaN(parsedQuote) || parsedQuote <= 0) {
-    alert("Please enter a valid quotation.");
-    return;
-  }
-
-  const email =
-    user.primaryEmailAddress?.emailAddress ??
-    user.emailAddresses?.[0]?.emailAddress ??
-    null;
-
-  if (!email) {
-    alert("No email found for this account.");
-    return;
-  }
-
-  try {
-    setIsSubmittingQuote(true);
-
-    const response = await apiClient.post("/set-quote-alert", {
-      username: user.username,
-      email,
-      target_rate: parsedQuote,
-    });
-
-    console.log("Quote alert saved:", response.data);
-    alert("Quotation alert saved.");
-    setTargetQuote("");
-  } catch (error: any) {
-    console.error("Failed to save quotation alert:", error);
-    alert(
-      JSON.stringify(error?.response?.data ?? error?.message ?? error, null, 2)
-    );
-  } finally {
-    setIsSubmittingQuote(false);
-  }
-}
 
   const chartData = useMemo(() => {
     if (fxSeries.length === 0) {
@@ -257,10 +289,32 @@ export default function Dashboard() {
     );
   }
 
+  function formatAmount(amount: number, currency: string) {
+    return new Intl.NumberFormat(currency === "BRL" ? "pt-BR" : "en-US", {
+      style: "currency",
+      currency: currency === "BRL" ? "BRL" : "USD",
+    }).format(amount);
+  }
+
+  function formatDate(dateString: string) {
+    const parsed = new Date(dateString);
+
+    if (Number.isNaN(parsed.getTime())) return dateString;
+
+    return parsed.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
   const previousRate =
     fxSeries.length >= 2 ? fxSeries[fxSeries.length - 2].value : null;
   const rateChange =
     latestRate !== null && previousRate !== null ? latestRate - previousRate : null;
+
+  const schedulerBillsCount = dashboardSummary?.count ?? 0;
+  const nextLiability = dashboardSummary?.next_liability ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -298,12 +352,14 @@ export default function Dashboard() {
               <div className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="absolute right-0 top-0 -mr-8 -mt-8 h-24 w-24 rounded-full bg-blue-700/5 transition-transform group-hover:scale-110" />
                 <p className="mb-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  Total Saved
+                  Scheduled Bills
                 </p>
-                <h3 className="text-3xl font-bold tracking-tight">$4,250.00</h3>
+                <h3 className="text-3xl font-bold tracking-tight">
+                  {dashboardSummaryLoading ? "..." : schedulerBillsCount}
+                </h3>
                 <div className="mt-4 flex items-center gap-2 text-sm font-medium text-emerald-500">
                   <TrendingUp className="h-4 w-4" />
-                  <span>+12.5% from last month</span>
+                  <span>Unpaid confirmed expenses</span>
                 </div>
               </div>
 
@@ -311,10 +367,22 @@ export default function Dashboard() {
                 <p className="mb-1 text-sm font-medium text-slate-500 dark:text-slate-400">
                   Next Payment Due
                 </p>
-                <h3 className="text-3xl font-bold tracking-tight">Oct 15, 2023</h3>
+                <h3 className="text-3xl font-bold tracking-tight">
+                  {dashboardSummaryLoading
+                    ? "..."
+                    : nextLiability
+                    ? formatDate(nextLiability.due_date)
+                    : "No due items"}
+                </h3>
                 <div className="mt-4 flex items-center gap-2 text-sm font-medium text-amber-500">
                   <Clock className="h-4 w-4" />
-                  <span>$2,500.00 Tuition Fee</span>
+                  <span>
+                    {dashboardSummaryLoading
+                      ? "Loading..."
+                      : nextLiability
+                      ? `${formatAmount(nextLiability.amount, nextLiability.currency)} ${nextLiability.name}`
+                      : "You're all caught up"}
+                  </span>
                 </div>
               </div>
 
@@ -390,7 +458,6 @@ export default function Dashboard() {
               <div className="flex flex-col gap-4 lg:col-span-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-lg font-bold">Market Watch (USD/BRL)</h4>
-      
                 </div>
 
                 <div className="flex min-h-[300px] flex-1 flex-col rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">

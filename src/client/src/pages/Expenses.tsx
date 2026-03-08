@@ -331,23 +331,6 @@ export default function ExpensesPage() {
             </div>
           </div>
 
-          <div className="px-4 pb-6 sm:px-6 lg:px-8">
-            <div className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-blue-700/20 bg-blue-700/5 p-4 md:flex-row md:items-center">
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined mt-0.5 text-blue-700">
-                  currency_exchange
-                </span>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Rates updated 5 minutes ago:{" "}
-                  <span className="font-bold">1 USD = 5.12 BRL</span> |{" "}
-                  <span className="font-bold">1 EUR = 5.44 BRL</span>
-                </p>
-              </div>
-              <button className="text-xs font-bold text-blue-700 hover:underline">
-                Manage Currency Settings
-              </button>
-            </div>
-          </div>
         </main>
       </div>
     </div>
