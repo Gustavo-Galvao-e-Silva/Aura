@@ -48,6 +48,15 @@ class QuoteAlertDTO(BaseModel):
     email: str
     target_rate: float
 
+class UpdateExpenseDTO(BaseModel):
+    username: str
+    name: str
+    amount: float
+    currency: Literal["USD", "BRL"]
+    due_date: str
+    category: str
+    is_paid: bool
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -396,3 +405,37 @@ async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
     db.add(target_quote)
     db.commit()
     db.refresh(target_quote)
+
+@app.put("/update-expense/{expense_id}")
+async def update_expense(
+    expense_id: int,
+    data: UpdateExpenseDTO,
+    db: Session = Depends(get_db),
+):
+    expense = db.query(Liability).filter(Liability.id == expense_id).first()
+
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    user = db.query(Users).filter(Users.username == data.username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+
+    expense.username = data.username
+    expense.name = data.name
+    expense.amount = data.amount
+    expense.currency = data.currency
+    expense.due_date = data.due_date
+    expense.category = data.category
+    expense.is_paid = data.is_paid
+
+    db.commit()
+    db.refresh(expense)
+
+    return {
+        "status": "success",
+        "expense": expense,
+    }

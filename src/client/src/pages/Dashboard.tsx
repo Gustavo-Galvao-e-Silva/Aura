@@ -390,11 +390,7 @@ export default function Dashboard() {
               <div className="flex flex-col gap-4 lg:col-span-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-lg font-bold">Market Watch (USD/BRL)</h4>
-                  <div className="flex gap-2">
-                    <button className="rounded-full bg-blue-700 px-3 py-1 text-xs font-medium text-white">
-                      2W
-                    </button>
-                  </div>
+      
                 </div>
 
                 <div className="flex min-h-[300px] flex-1 flex-col rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">

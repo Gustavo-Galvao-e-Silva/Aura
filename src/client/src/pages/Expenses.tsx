@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Modal from "../components/Modal";
 import AddExpensesModal from "../components/AddExpensesModal";
 import apiClient from "../API/client";
-import { getExpenseStats } from "../API/ExpensesClient";
+import { getExpenseStats, updateExpense } from "../API/ExpensesClient";
 import { useUser } from "@clerk/react-router";
 
 type Liability = {
@@ -13,7 +13,7 @@ type Liability = {
   username: string;
   name: string;
   amount: number;
-  currency: string;
+  currency: "USD" | "BRL";
   due_date: string;
   is_predicted: boolean;
   is_paid: boolean;
@@ -34,36 +34,85 @@ export default function ExpensesPage() {
     upcoming_total: 0,
     overdue_total: 0,
   });
-  const { isLoaded, isSignedIn, user } = useUser();
 
-useEffect(() => {
-  if (!user?.username) return;
+  const { user } = useUser();
 
-  async function loadPageData() {
+  useEffect(() => {
+    if (!user?.username) return;
+
+    async function loadPageData() {
+      try {
+        setLoading(true);
+
+        const [expensesResponse, statsResponse] = await Promise.all([
+          apiClient.get("/get-user-expenses", {
+            params: {
+              username: user?.username,
+              filter_by: selectedFilter,
+            },
+          }),
+          getExpenseStats(user!.username!),
+        ]);
+
+        setExpenses(expensesResponse.data["user-expenses"] ?? []);
+        setStats(statsResponse);
+      } catch (error) {
+        console.error("Failed to fetch expenses:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadPageData();
+  }, [selectedFilter, user?.username]);
+
+  async function handleExpenseSave(updated: {
+    id: number;
+    username: string;
+    name: string;
+    date: string;
+    value: number;
+    currency: "USD" | "BRL";
+    status: string;
+    category: string;
+    is_paid: boolean;
+  }) {
     try {
-      setLoading(true);
+      await updateExpense(updated.id, {
+        username: updated.username,
+        name: updated.name,
+        amount: updated.value,
+        currency: updated.currency,
+        due_date: updated.date,
+        category: updated.category,
+        is_paid: updated.is_paid,
+      });
 
-      const [expensesResponse, statsResponse] = await Promise.all([
-        apiClient.get("/get-user-expenses", {
-          params: {
-            username: user?.username,
-            filter_by: selectedFilter,
-          },
-        }),
-        getExpenseStats(user!.username!),
-      ]);
+      setExpenses((prev) =>
+        prev.map((expense) =>
+          expense.id === updated.id
+            ? {
+                ...expense,
+                username: updated.username,
+                name: updated.name,
+                due_date: updated.date,
+                amount: updated.value,
+                currency: updated.currency,
+                category: updated.category,
+                is_paid: updated.is_paid,
+              }
+            : expense
+        )
+      );
 
-      setExpenses(expensesResponse.data["user-expenses"] ?? []);
-      setStats(statsResponse);
+      if (user?.username) {
+        const statsResponse = await getExpenseStats(user.username);
+        setStats(statsResponse);
+      }
     } catch (error) {
-      console.error("Failed to fetch expenses:", error);
-    } finally {
-      setLoading(false);
+      console.error("Failed to update expense:", error);
     }
   }
-
-  loadPageData();
-}, [selectedFilter, user?.username]);
 
   function getTabClass(filter: ExpenseFilter) {
     const isActive = selectedFilter === filter;
@@ -76,8 +125,14 @@ useEffect(() => {
   function formatBRL(value: number) {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
-      currency: "USD",
+      currency: "BRL",
     }).format(value);
+  }
+
+  function getStatus(expense: Liability) {
+    if (expense.is_paid) return "Paid";
+    if (new Date(expense.due_date) < new Date()) return "Overdue";
+    return "Upcoming";
   }
 
   return (
@@ -213,18 +268,16 @@ useEffect(() => {
                     {expenses.map((expense) => (
                       <ExpenseComponent
                         key={expense.id}
+                        id={expense.id}
+                        username={expense.username}
                         Name={expense.name}
                         Date={expense.due_date}
                         Value={expense.amount}
                         Currency={expense.currency}
-                        Status={
-                          expense.is_paid
-                            ? "Paid"
-                            : new Date(expense.due_date) < new Date()
-                            ? "Overdue"
-                            : "Upcoming"
-                        }
+                        Status={getStatus(expense)}
                         Category={expense.category ?? "Other"}
+                        IsPaid={expense.is_paid}
+                        onSave={handleExpenseSave}
                       />
                     ))}
                   </div>
@@ -258,18 +311,16 @@ useEffect(() => {
                         {expenses.map((expense) => (
                           <ExpenseComponent
                             key={expense.id}
+                            id={expense.id}
+                            username={expense.username}
                             Name={expense.name}
                             Date={expense.due_date}
                             Value={expense.amount}
                             Currency={expense.currency}
-                            Status={
-                              expense.is_paid
-                                ? "Paid"
-                                : new Date(expense.due_date) < new Date()
-                                ? "Overdue"
-                                : "Upcoming"
-                            }
+                            Status={getStatus(expense)}
                             Category={expense.category ?? "Other"}
+                            IsPaid={expense.is_paid}
+                            onSave={handleExpenseSave}
                           />
                         ))}
                       </tbody>
