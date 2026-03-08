@@ -26,11 +26,13 @@ async def fx_strategist_node(state: AuraState):
     Uses a Two-Pass approach: 
     1. Grounded Search for raw info.
     2. JSON extraction for the state.
+    Includes caching to prevent 429 Resource Exhausted errors.
     """
     global last_fx_data, last_fx_update
 
     now = datetime.now()
 
+    # 1. Check if we have valid cached data
     if last_fx_data and last_fx_update:
         age = (now - last_fx_update).total_seconds() / 60
         if age < CACHE_EXPIRY_MINUTES:
@@ -63,7 +65,6 @@ async def fx_strategist_node(state: AuraState):
         raw_intelligence = search_response.text
         
         # PASS 2: JSON Distillation
-        # We feed the grounded research back to Gemini to get a clean JSON object
         distill_prompt = (
             f"Based on the following market research, extract the data into a JSON object.\n\n"
             f"Research: {raw_intelligence}\n\n"
@@ -79,6 +80,7 @@ async def fx_strategist_node(state: AuraState):
         )
         data = json.loads(distill_response.text)
 
+        # Update cache on success
         last_fx_data = data
         last_fx_update = now
 
@@ -98,16 +100,20 @@ async def fx_strategist_node(state: AuraState):
 
 def visionary_accountant_node(image_bytes: bytes, history_context: str = "No history available."):
     """Uses Gemini 2.5 Flash to process financial documents."""
-    model = client.models.generate_content(
-        model=current_model_id,
-        contents=[
-            get_visionary_accountant_prompt(history_context),
-            Image.open(io.BytesIO(image_bytes))
-        ]
-    )
-    
     try:
-        text = model.text
+        response = client.models.generate_content(
+            model=current_model_id,
+            contents=[
+                get_visionary_accountant_prompt(history_context),
+                Image.open(io.BytesIO(image_bytes))
+            ]
+        )
+        
+        if not response or not response.text:
+            print("Visionary Accountant Error: Empty response from model.")
+            return None
+
+        text = response.text
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
         return json.loads(text.strip())
