@@ -23,18 +23,28 @@ def trust_engine_node(state: AuraState):
         "payment_decisions": state.get("payment_decisions")
     }
     
-    # Generate the SHA-256 hash
+    # Generate the SHA-256 hash (This is our "Fingerprint of Logic")
     dumped_data = json.dumps(decision_payload, sort_keys=True)
     audit_hash = hashlib.sha256(dumped_data.encode()).hexdigest()
     
-    # 2. CHECK FOR EXISTING HASH (Optimization)
+    # --- NEW: Link individual decisions to this hash for the UI ---
+    updated_decisions = []
+    for decision in state.get("payment_decisions", []):
+        d = decision.copy()
+        d["audit_hash"] = audit_hash
+        updated_decisions.append(d)
+    
+    # 2. CHECK FOR EXISTING HASH (Optimization to save DB/Stellar costs)
     db = SessionLocal()
     try:
         existing_log = db.query(AuditLog).filter(AuditLog.decision_hash == audit_hash).first()
         
         if existing_log:
             print(f"♻️ Trust Engine: Audit for hash {audit_hash[:10]} already exists. Skipping duplicate ledger entry.")
-            return {"audit_hash": audit_hash}
+            return {
+                "audit_hash": audit_hash,
+                "payment_decisions": updated_decisions
+            }
             
         # 3. PERSIST TO POSTGRES (If new)
         new_log = AuditLog(
@@ -55,7 +65,10 @@ def trust_engine_node(state: AuraState):
     secret_key = os.getenv("STELLAR_SECRET_KEY")
     if not secret_key:
         print("⚠️ STELLAR_SECRET_KEY missing in .env. Skipping blockchain submission.")
-        return {"audit_hash": audit_hash}
+        return {
+            "audit_hash": audit_hash,
+            "payment_decisions": updated_decisions
+        }
 
     try:
         # Connect to Testnet
@@ -89,4 +102,7 @@ def trust_engine_node(state: AuraState):
         # Improved error logging to catch specific SDK issues
         print(f"⚠️ Stellar Submission Failed: {e}")
 
-    return {"audit_hash": audit_hash}
+    return {
+        "audit_hash": audit_hash,
+        "payment_decisions": updated_decisions
+    }
