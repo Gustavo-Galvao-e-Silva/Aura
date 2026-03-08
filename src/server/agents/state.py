@@ -11,5 +11,6 @@ class AuraState(TypedDict):
     market_prediction: str           # From FX Strategist ('BUY', 'WAIT')
     
     # Execution data
+    route_options: List[Dict]
     selected_route: Optional[dict]   # From Smart Router
     audit_hash: Optional[str]        # From Trust Engine
