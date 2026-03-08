@@ -1,8 +1,9 @@
 import asyncio
 import os
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends
+from fastapi import FastAPI, Depends, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Literal, Optional
 
 # Fixed absolute imports
 from agents.state import AuraState
@@ -15,6 +16,13 @@ from sqlalchemy.orm import Session
 from db.models import Base, Liability, Users
 from my_fastapi_app.app.db.session import engine, get_db
 
+from datetime import date, timedelta
+from typing import Literal
+
+from fastapi import Depends, Query
+from sqlalchemy.orm import Session
+
+
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 
 class CreateUserDTO(BaseModel):
@@ -23,11 +31,13 @@ class CreateUserDTO(BaseModel):
     email: str
 
 
+
 class CreateExpenseDTO(BaseModel):
+    username: str
     name: str
     amount: float
     currency: Literal["USD", "BRL"]
-    due_date: date
+    due_date: str
     category: str
 
 
@@ -76,13 +86,12 @@ async def get_status():
 
 @app.post("/upload-invoice")
 async def upload_invoice(
-    username: str,
+    username: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
     image_bytes = await file.read()
 
-    # 1. Fetch this user's history from DB to provide context
     past_liabilities = (
         db.query(Liability)
         .filter(Liability.username == username)
@@ -94,7 +103,6 @@ async def upload_invoice(
         [f"{l.name}: ${l.amount} due {l.due_date}" for l in past_liabilities]
     )
 
-    # 2. Run Vision Agent with History Context
     extraction_result = visionary_accountant_node(
         image_bytes,
         history_context=history_str,
@@ -103,25 +111,11 @@ async def upload_invoice(
     if not extraction_result:
         return {"status": "error", "message": "Extraction failed"}
 
-    # 3. Save Actual Liabilities for this user
     for item in extraction_result.get("actual_liabilities", []):
-        db.add(
-            Liability(
-                **item,
-                username=username,
-                is_predicted=False,
-            )
-        )
+        db.add(Liability(**item, username=username, is_predicted=False))
 
-    # 4. Save Predicted Liabilities for this user
     for item in extraction_result.get("predicted_liabilities", []):
-        db.add(
-            Liability(
-                **item,
-                username=username,
-                is_predicted=True,
-            )
-        )
+        db.add(Liability(**item, username=username, is_predicted=True))
 
     db.commit()
 
@@ -131,12 +125,50 @@ async def upload_invoice(
         "predicted_count": len(extraction_result.get("predicted_liabilities", [])),
     }
 
+
 @app.get("/get-user-expenses")
-async def get_user_expenses(db: Session = Depends(get_db)):
-    past_liabilities = db.query(Liability).all()
-    return {
-        "user-expenses": past_liabilities
-    }
+async def get_user_expenses(
+    filter_by: Literal["all", "upcoming", "paid", "overdue", "predicted"] = Query("all"),
+    limit: int | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Liability)
+
+    if filter_by == "all":
+        query = query.filter(Liability.is_predicted == False)
+
+    elif filter_by == "upcoming":
+        query = query.filter(
+            Liability.is_predicted == False,
+            Liability.is_paid == False,
+            Liability.due_date >= date.today(),
+        )
+
+    elif filter_by == "paid":
+        query = query.filter(
+            Liability.is_predicted == False,
+            Liability.is_paid == True,
+        )
+
+    elif filter_by == "overdue":
+        query = query.filter(
+            Liability.is_predicted == False,
+            Liability.is_paid == False,
+            Liability.due_date < date.today(),
+        )
+
+    elif filter_by == "predicted":
+        query = query.filter(Liability.is_predicted == True)
+
+    query = query.order_by(Liability.due_date)
+
+    if limit is not None:
+        query = query.limit(limit)
+
+    past_liabilities = query.all()
+
+    return {"user-expenses": past_liabilities}
+
 
 @app.post("/post-create-user")
 async def post_create_user(
@@ -176,3 +208,39 @@ async def post_create_expense(
     db.refresh(new_liability)
 
     return new_liability
+
+@app.get("/get-expense-stats")
+async def get_expense_stats(
+    username: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Liability).filter(Liability.is_predicted == False)
+
+    if username:
+        query = query.filter(Liability.username == username)
+
+    all_expenses = query.all()
+    today = date.today()
+    week_from_now = today + timedelta(days=7)
+
+    total_to_be_paid = sum(
+        expense.amount for expense in all_expenses if not expense.is_paid
+    )
+
+    upcoming_total = sum(
+        expense.amount
+        for expense in all_expenses
+        if (not expense.is_paid and today <= expense.due_date <= week_from_now)
+    )
+
+    overdue_total = sum(
+        expense.amount
+        for expense in all_expenses
+        if (not expense.is_paid and expense.due_date < today)
+    )
+
+    return {
+        "total_to_be_paid": total_to_be_paid,
+        "upcoming_total": upcoming_total,
+        "overdue_total": overdue_total,
+    }
