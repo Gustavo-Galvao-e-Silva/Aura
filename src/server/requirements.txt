@@ -18,3 +18,4 @@ SQLAlchemy
 psycopg2-binary
 browser-use
 playwright
+langchain-google-genai
