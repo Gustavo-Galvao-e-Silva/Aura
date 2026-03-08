@@ -55,6 +55,7 @@ app.add_middleware(
 )
 
 current_state: AuraState = {
+    "route_options": [],
     "brl_balance": 50000.0,
     "usd_balance": 0.0,
     "current_fx_rate": 0.0,
