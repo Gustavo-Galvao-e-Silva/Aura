@@ -18,7 +18,7 @@ last_fx_update = None
 
 # 1. Initialize the standard Client
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
-current_model_id = "gemini-2.5-flash"
+current_model_id = "gemini-3.1-flash-lite-preview"
 
 async def fx_strategist_node(state: AuraState):
     """
