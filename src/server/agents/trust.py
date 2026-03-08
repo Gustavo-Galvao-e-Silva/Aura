@@ -4,6 +4,9 @@ import os
 from stellar_sdk import Server, Keypair, TransactionBuilder, Network
 from agents.state import AuraState
 
+from dotenv import load_dotenv
+load_dotenv()
+
 def trust_engine_node(state: AuraState):
     """
     Role 3: The Trust Engine.
