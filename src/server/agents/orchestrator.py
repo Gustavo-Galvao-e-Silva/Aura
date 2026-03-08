@@ -3,11 +3,11 @@ from my_fastapi_app.app.db.session import SessionLocal
 from db.models import Liability
 from agents.state import AuraState
 
-
 def orchestrator_node(state: AuraState):
     """
     Role 4: The Master Orchestrator.
     Combines Market Intel, Route Facts, and DB Liabilities to make decisions.
+    Determines 'Pay' vs 'Wait' for every liability and returns structured data.
     """
     db = SessionLocal()
     try:
@@ -18,51 +18,67 @@ def orchestrator_node(state: AuraState):
         ).all()
 
         if not unpaid:
-            print("🎖️ Orchestrator: No unpaid liabilities. Standing down.")
-            return {"selected_route": None}
+            print("🎖️ Orchestrator: No unpaid liabilities.")
+            return {"selected_route": None, "payment_decisions": []}
 
+        # 2. Get route data
         routes = state.get("route_options", [])
         crebit_route = next((r for r in routes if r["name"] == "Crebit"), None)
-
         market_signal = state.get("market_prediction")
-        decisions = []
+        
+        decisions_list = []
+        top_alert = None
 
         for bill in unpaid:
             days_until_due = (bill.due_date - date.today()).days
-
-            should_act = False
-            reason = ""
+            
+            # --- STRUCTURED DECISION LOGIC ---
+            pay_now = False
+            reason = "Market is neutral/bearish and deadline is far. Waiting for better conditions."
 
             if market_signal == "BULLISH":
-                should_act = True
-                reason = "Market is BULLISH (BRL is strong). Buying now may save money."
+                pay_now = True
+                reason = "Market is BULLISH (BRL is strong). Converting now locks in savings."
             elif days_until_due <= 3:
-                should_act = True
-                reason = f"Deadline approach: {bill.name} is due in {max(0, days_until_due)} days."
+                pay_now = True
+                reason = f"URGENT: {bill.name} is due in {max(0, days_until_due)} days. Pay now to avoid penalties."
 
-            if should_act and crebit_route:
-                # scale provider output from reference_usd to actual bill amount
-                fx_used = crebit_route.get("fx_used", 0.0)
-                fee_usd = crebit_route.get("fee_usd", 0.0)
-                eta_hours = crebit_route.get("eta_hours", "24")
+            # Calculate the specific cost for this bill
+            cost_details = {}
+            if crebit_route:
+                fx = crebit_route.get("fx_used", 0.0)
+                fee = crebit_route.get("fee_usd", 0.0)
+                cost_details = {
+                    "fx_rate": fx,
+                    "estimated_brl": (bill.amount + fee) * fx
+                }
 
-                actual_brl_cost = (bill.amount + fee_usd) * fx_used
+            # Add to structured JSON
+            decisions_list.append({
+                "liability_id": bill.id,
+                "name": bill.name,
+                "amount_usd": bill.amount,
+                "pay": pay_now,
+                "reason": reason,
+                "cost_estimate_brl": cost_details.get("estimated_brl", 0.0)
+            })
 
-                alert_msg = (
-                    f"🚀 Aura Action: {reason}\n"
-                    f"Bill: {bill.name} (${bill.amount:.2f})\n"
-                    f"Rec: Use {crebit_route['name']} via our optimized rail.\n"
-                    f"Current Rate: {fx_used:.4f} BRL/USD\n"
-                    f"Fee: ${fee_usd:.2f}\n"
-                    f"Total Cost: R${actual_brl_cost:.2f}\n"
-                    f"ETA: {eta_hours}hr."
+            # Prepare the string for the main selected_route alert (Top priority)
+            if pay_now and not top_alert:
+                top_alert = (
+                    f"🚀 Aura Recommendation: {reason}\n"
+                    f"Pay {bill.name} (${bill.amount:.2f}) via {crebit_route['name']} "
+                    f"for R${cost_details.get('estimated_brl', 0.0):.2f}."
                 )
 
-                decisions.append(alert_msg)
-                print(f"✅ Decision made for {bill.name}: {reason}")
+        print(f"✅ Orchestrator processed {len(decisions_list)} bills.")
 
         return {
-            "selected_route": decisions[0] if decisions else "Wait for better market conditions."
+            "payment_decisions": decisions_list,
+            "selected_route": top_alert if top_alert else "Aura suggests waiting for better market conditions."
         }
+    except Exception as e:
+        print(f"❌ Orchestrator Error: {e}")
+        return {"payment_decisions": [], "selected_route": None}
     finally:
         db.close()
