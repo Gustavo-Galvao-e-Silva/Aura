@@ -30,3 +30,6 @@ status:
 
 pip:
 	pip install -r requirements.txt
+
+thanks:
+	echo thanks nando
