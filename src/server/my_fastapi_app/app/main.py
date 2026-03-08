@@ -1,11 +1,10 @@
 import asyncio
 import os
-from fastapi import FastAPI, Depends, File, UploadFile, Form
+from fastapi import FastAPI, Depends, File, HTTPException, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Literal, Optional
 
-# Fixed absolute imports
 from agents.state import AuraState
 from agents.agents import visionary_accountant_node
 
@@ -22,6 +21,9 @@ from typing import Literal
 from fastapi import Depends, Query
 from sqlalchemy.orm import Session
 
+import os
+import httpx
+
 
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 
@@ -29,8 +31,6 @@ class CreateUserDTO(BaseModel):
     fullName: str
     username: str
     email: str
-
-
 
 class CreateExpenseDTO(BaseModel):
     username: str
@@ -52,7 +52,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Shared state
 current_state: AuraState = {
     "brl_balance": 50000.0,
     "usd_balance": 0.0,
@@ -244,3 +243,156 @@ async def get_expense_stats(
         "upcoming_total": upcoming_total,
         "overdue_total": overdue_total,
     }
+
+@app.post("/create-expense")
+async def post_create_expense(
+    data: CreateExpenseDTO,
+    db: Session = Depends(get_db),
+):
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+
+    user = db.query(Users).filter(Users.username == data.username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    new_liability = Liability(
+        username=data.username,
+        name=data.name,
+        amount=data.amount,
+        currency=data.currency,
+        due_date=data.due_date,
+        category=data.category,
+        is_predicted=False,
+        is_paid=False,
+    )
+
+    db.add(new_liability)
+    db.commit()
+    db.refresh(new_liability)
+
+    return {
+        "status": "success",
+        "expense": new_liability,
+    }
+
+
+@app.get("/get-fx-provider-rates")
+async def get_fx_provider_rates():
+    crebit_url = "https://api.crebitpay.com/api/create-quote-new"
+    wise_url = "https://api.wise.com/v3/quotes"
+    remitly_url = "https://api.remitly.io/v3/calculator/estimate"
+
+    wise_api_key = os.getenv("WISE_API_KEY")
+
+    parsed = {
+        "crebit": None,
+        "wise": None,
+        "remitly": None,
+    }
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        # CREBIT
+        try:
+            crebit_response = await client.post(
+                crebit_url,
+                json={
+                    "symbol": "USDC/BRL",
+                    "quote_type": "on_ramp",
+                },
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+            )
+            crebit_json = crebit_response.json()
+
+            parsed["crebit"] = {
+                "provider": "crebit",
+                "rate": float(crebit_json["quotation"]) if crebit_json.get("quotation") else None,
+            }
+        except Exception as e:
+            parsed["crebit"] = {
+                "provider": "crebit",
+                "rate": None,
+                "error": str(e),
+            }
+
+        # WISE
+        try:
+            wise_headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+
+            if wise_api_key:
+                wise_headers["Authorization"] = f"Bearer {wise_api_key}"
+
+            wise_response = await client.post(
+                wise_url,
+                json={
+                    "sourceCurrency": "USD",
+                    "targetCurrency": "BRL",
+                    "sourceAmount": 1,
+                },
+                headers=wise_headers,
+            )
+
+            wise_json = wise_response.json()
+
+            wise_rate = (
+                wise_json.get("rate")
+                or wise_json.get("price", {}).get("rate")
+                or wise_json.get("paymentOptions", [{}])[0].get("rate")
+            )
+
+            parsed["wise"] = {
+                "provider": "wise",
+                "rate": float(wise_rate) if wise_rate is not None else None,
+            }
+        except Exception as e:
+            parsed["wise"] = {
+                "provider": "wise",
+                "rate": None,
+                "error": str(e),
+            }
+
+        # REMITLY
+        try:
+            remitly_response = await client.get(
+                remitly_url,
+                params={
+                    "conduit": "USA:USD-BRA:BRL",
+                    "anchor": "SEND",
+                    "amount": 100,
+                    "purpose": "OTHER",
+                    "customer_segment": "STANDARD",
+                    "customer_recognition": "UNRECOGNIZED",
+                    "strict_promo": "false",
+                },
+                headers={
+                    "Accept": "application/json",
+                },
+            )
+
+            remitly_json = remitly_response.json()
+            exchange_rate = remitly_json.get("estimate", {}).get("exchange_rate", {})
+
+            remitly_rate = (
+                exchange_rate.get("promotional_exchange_rate")
+                or exchange_rate.get("base_rate")
+            )
+
+            parsed["remitly"] = {
+                "provider": "remitly",
+                "rate": float(remitly_rate) if remitly_rate is not None else None,
+            }
+        except Exception as e:
+            parsed["remitly"] = {
+                "provider": "remitly",
+                "rate": None,
+                "error": str(e),
+            }
+
+    return parsed
+ 

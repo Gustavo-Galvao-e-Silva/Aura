@@ -7,6 +7,7 @@ import FinGlobalLoginPage from "./pages/Login";
 import FinGlobalRegisterPage from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import ExpensesPage from "./pages/Expenses";
+import RouteOptimizer from "./pages/RouteOptimizer";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -42,6 +43,15 @@ ReactDOM.createRoot(root).render(
           element={
             <Show when="signed-in" fallback={<RedirectToSignIn />}>
               <ExpensesPage/>
+            </Show>
+          }
+        />
+
+        <Route
+          path="/routes"
+          element={
+            <Show when="signed-in" fallback={<RedirectToSignIn />}>
+              <RouteOptimizer/>
             </Show>
           }
         />
