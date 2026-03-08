@@ -17,6 +17,15 @@ export type CreateExpensePayload = {
   notes?: string;
 };
 
+export type UpdateExpensePayload = {
+  username: string;
+  name: string;
+  amount: number;
+  currency: "USD" | "BRL";
+  due_date: string;
+  category: string;
+  is_paid: boolean;
+};
 
 export async function uploadInvoice(file: File, username: string) {
   const formData = new FormData();
@@ -41,5 +50,13 @@ export async function getExpenseStats(username?: string) {
 
 export async function createExpense(payload: CreateExpensePayload) {
   const response = await apiClient.post("/create-expense", payload);
+  return response.data;
+}
+
+export async function updateExpense(
+  expenseId: number,
+  payload: UpdateExpensePayload
+) {
+  const response = await apiClient.put(`/update-expense/${expenseId}`, payload);
   return response.data;
 }
