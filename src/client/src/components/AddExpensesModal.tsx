@@ -1,7 +1,10 @@
 import { Upload, X } from "lucide-react";
 import { useState } from "react";
 import { useUser } from "@clerk/react-router";
-import { uploadInvoice } from "../API/ExpensesClient";
+import {
+  uploadInvoice,
+  createExpense,
+} from "../API/ExpensesClient";
 
 type AddExpensesModalProps = {
   CloseModal: () => void;
@@ -14,6 +17,7 @@ export default function AddExpensesModal({
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCreatingExpense, setIsCreatingExpense] = useState(false);
 
   const [expenseName, setExpenseName] = useState("");
   const [amount, setAmount] = useState("");
@@ -36,9 +40,6 @@ export default function AddExpensesModal({
     try {
       setIsUploading(true);
 
-      console.log("Uploading file:", selectedFile);
-      console.log("Uploading for username:", user.username);
-
       const data = await uploadInvoice(selectedFile, user.username);
 
       console.log("Upload success:", data);
@@ -52,6 +53,56 @@ export default function AddExpensesModal({
       );
     } finally {
       setIsUploading(false);
+    }
+  }
+
+  async function handleCreateExpense() {
+    if (!user?.username) {
+      alert("No username found for current user.");
+      return;
+    }
+
+    if (!expenseName.trim()) {
+      alert("Expense name is required.");
+      return;
+    }
+
+    if (!amount || Number(amount) <= 0) {
+      alert("Amount must be greater than 0.");
+      return;
+    }
+
+    if (!dueDate) {
+      alert("Due date is required.");
+      return;
+    }
+
+    try {
+      setIsCreatingExpense(true);
+
+      const payload = {
+        username: user.username,
+        name: expenseName.trim(),
+        amount: Number(amount),
+        currency,
+        due_date: dueDate,
+        category,
+        notes: notes.trim(),
+      };
+
+      const data = await createExpense(payload);
+
+      console.log("Manual expense created:", data);
+      CloseModal();
+    } catch (error: any) {
+      console.error("Create expense failed:", error);
+      console.error("Response data:", error?.response?.data);
+
+      alert(
+        JSON.stringify(error?.response?.data ?? error?.message ?? error, null, 2)
+      );
+    } finally {
+      setIsCreatingExpense(false);
     }
   }
 
@@ -153,6 +204,8 @@ export default function AddExpensesModal({
                     className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
                     placeholder="0.00"
                     type="number"
+                    min="0"
+                    step="0.01"
                   />
                 </div>
 
@@ -229,9 +282,11 @@ export default function AddExpensesModal({
 
           <button
             type="button"
-            className="rounded-xl bg-blue-700 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-700/25 transition-all hover:opacity-90 active:scale-95"
+            onClick={handleCreateExpense}
+            disabled={isCreatingExpense}
+            className="rounded-xl bg-blue-700 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-700/25 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
           >
-            Add Expense
+            {isCreatingExpense ? "Adding..." : "Add Expense"}
           </button>
         </div>
       </div>

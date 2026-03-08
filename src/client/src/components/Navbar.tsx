@@ -26,8 +26,9 @@ export default function Navbar(){
              
                 <MenuButton redirect_link="/dashboard" Name="Dashboard" Icon={<Home size={25}/>}/>
                 <MenuButton redirect_link="/expenses" Name="Expenses" Icon={<ScrollText/>}/>
-                <MenuButton redirect_link="/scheduler" Name="Bill Scheduler" Icon={<ClockFading/>}/>
                 <MenuButton redirect_link="/routes" Name="FX Routes" Icon={<Route/>}/>
+                <MenuButton redirect_link="/scheduler" Name="Bill Scheduler" Icon={<ClockFading/>}/>
+              
 
             </nav>
 

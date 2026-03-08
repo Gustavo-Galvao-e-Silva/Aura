@@ -7,6 +7,17 @@ export type ExpenseStats = {
   overdue_total: number;
 };
 
+export type CreateExpensePayload = {
+  username: string;
+  name: string;
+  amount: number;
+  currency: "USD" | "BRL";
+  due_date: string;
+  category: string;
+  notes?: string;
+};
+
+
 export async function uploadInvoice(file: File, username: string) {
   const formData = new FormData();
   formData.append("username", username);
@@ -26,4 +37,9 @@ export async function getExpenseStats(username?: string) {
   });
 
   return response.data as ExpenseStats;
+}
+
+export async function createExpense(payload: CreateExpensePayload) {
+  const response = await apiClient.post("/create-expense", payload);
+  return response.data;
 }
