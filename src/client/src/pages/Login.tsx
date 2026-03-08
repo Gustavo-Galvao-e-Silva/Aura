@@ -80,7 +80,7 @@ export default function FinGlobalLoginPage() {
                     <Wallet className="h-9 w-9" />
                   </div>
                   <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                    Thea.do
+                    Revellio
                   </h1>
                 </Link>
 
@@ -179,7 +179,7 @@ export default function FinGlobalLoginPage() {
                   </div>
                   <div className="relative flex justify-center text-sm">
                     <span className="bg-white px-2 text-slate-500 dark:bg-slate-900">
-                      New to Thea.do?
+                      New to Revellio?
                     </span>
                   </div>
                 </div>
