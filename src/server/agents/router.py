@@ -209,12 +209,13 @@ def notify_users_if_quote_below_target(routes):
             db.query(CotationNotify)
             .filter(
                 CotationNotify.rate <= max_rate,
+                CotationNotify.has_notified == False
             )
             .all()
         )
 
         if not alerts:
-            print(f"📭 Notify: No users to notify. Lowest rate = {max_rate:.4f}")
+            print(f"📭 Notify: No users to notify. Best rate = {max_rate:.4f}")
             return {"notifications_sent": 0}
 
         notifications_sent = 0
@@ -243,8 +244,8 @@ def notify_users_if_quote_below_target(routes):
 
         return {
             "notifications_sent": notifications_sent,
-            "lowest_rate": max_rate,
-            "lowest_provider": provider_name,
+            "best_rate": max_rate,
+            "best_provider": provider_name,
         }
 
     finally:

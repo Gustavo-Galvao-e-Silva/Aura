@@ -216,7 +216,7 @@ async def post_create_expense(
 
 @app.get("/get-expense-stats")
 async def get_expense_stats(
-    username: Optional[str] = Query(None),
+    username: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     query = db.query(Liability).filter(Liability.is_predicted == False)

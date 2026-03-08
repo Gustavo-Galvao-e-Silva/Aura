@@ -43,6 +43,5 @@ class CotationNotify(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     username = Column(String, nullable=False, index=True) 
     rate = Column(Float)
-    email = Column(String, unique=True, nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
     has_notified = Column(Boolean, default=False)
-    

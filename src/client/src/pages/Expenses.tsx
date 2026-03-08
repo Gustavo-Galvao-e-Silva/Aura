@@ -34,7 +34,7 @@ export default function ExpensesPage() {
     upcoming_total: 0,
     overdue_total: 0,
   });
-  const { user, isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn, user } = useUser();
 
 useEffect(() => {
   if (!user?.username) return;
@@ -50,7 +50,7 @@ useEffect(() => {
             filter_by: selectedFilter,
           },
         }),
-        getExpenseStats(),
+        getExpenseStats(user!.username!),
       ]);
 
       setExpenses(expensesResponse.data["user-expenses"] ?? []);
@@ -76,7 +76,7 @@ useEffect(() => {
   function formatBRL(value: number) {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
-      currency: "BRL",
+      currency: "USD",
     }).format(value);
   }
 
