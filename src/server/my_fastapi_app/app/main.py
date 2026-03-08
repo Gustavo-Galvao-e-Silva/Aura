@@ -69,7 +69,7 @@ async def monitor_market_loop():
         print("Aura heartbeat: Updating market and routes...")
         # Role 1 will eventually invoke the graph here
 
-        result = aura_graph.invoke(current_state)
+        result = await aura_graph.ainvoke(current_state)
         current_state.update(result)
 
         await asyncio.sleep(60) # Set to 60s for demo/dev
