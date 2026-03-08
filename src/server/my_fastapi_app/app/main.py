@@ -456,6 +456,7 @@ async def update_expense(
     return {
         "count": count,
         "next_liability": next_liability
+    }
 
 @app.get("/verify-reasoning/{identifier}")
 async def verify_reasoning(identifier: str, db: Session = Depends(get_db)):
