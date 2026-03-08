@@ -16,6 +16,6 @@ python-dotenv
 python-multipart
 SQLAlchemy
 psycopg2-binary
-browser-use
+browser-use==0.12.1
 playwright
 langchain-google-genai
