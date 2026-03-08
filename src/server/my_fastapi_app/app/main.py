@@ -189,28 +189,6 @@ async def post_create_user(
 
     return new_user
 
-@app.post("/create-expense")
-async def post_create_expense(
-    data: CreateExpenseDTO,
-    db: Session = Depends(get_db),
-):
-    new_liability = Liability(
-        username=data.username,
-        name=data.name,
-        amount=data.amount,
-        currency=data.currency,
-        due_date=data.due_date,
-        category=data.category,
-        is_predicted=False,
-        is_paid=False,
-    )
-
-    db.add(new_liability)
-    db.commit()
-    db.refresh(new_liability)
-
-    return new_liability
-
 @app.get("/get-expense-stats")
 async def get_expense_stats(
     username: Optional[str] = Query(None),
