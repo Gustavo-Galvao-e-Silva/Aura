@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useUser } from "@clerk/react-router";
 import Navbar from "../components/Navbar";
 import {
   ArrowRight,
@@ -19,7 +20,20 @@ type ProviderRatesResponse = {
 };
 
 type ProviderKey = "crebit" | "wise" | "remitly";
-type BillType = "tuition" | "rent" | "utilities" | "living";
+
+type Liability = {
+  id: number;
+  username: string;
+  name: string;
+  amount: number;
+  currency: string;
+  due_date: string;
+  is_predicted: boolean;
+  is_paid: boolean;
+  category: string | null;
+  priority_level: number;
+  created_at: string;
+};
 
 const providerLabelMap: Record<ProviderKey, string> = {
   crebit: "Crebit",
@@ -57,21 +71,9 @@ const providerLogoMap: Record<ProviderKey, string> = {
   remitly: "./unnamed.png",
 };
 
-const billAmountMap: Record<BillType, number> = {
-  tuition: 5000,
-  rent: 1200,
-  utilities: 300,
-  living: 800,
-};
-
-const billLabelMap: Record<BillType, string> = {
-  tuition: "Semester Tuition ($5,000)",
-  rent: "Monthly Rent ($1,200)",
-  utilities: "Utilities & Internet ($300)",
-  living: "Living Expenses ($800)",
-};
-
 export default function TransferRoutesPage() {
+  const { user, isLoaded, isSignedIn } = useUser();
+
   const [rates, setRates] = useState<ProviderRatesResponse>({
     crebit: null,
     wise: null,
@@ -80,7 +82,10 @@ export default function TransferRoutesPage() {
 
   const [loadingRates, setLoadingRates] = useState(true);
 
-  const [selectedBill, setSelectedBill] = useState<BillType>("tuition");
+  const [bills, setBills] = useState<Liability[]>([]);
+  const [loadingBills, setLoadingBills] = useState(true);
+  const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
+
   const [leftProvider, setLeftProvider] = useState<ProviderKey>("crebit");
   const [rightProvider, setRightProvider] = useState<ProviderKey>("wise");
 
@@ -118,6 +123,40 @@ export default function TransferRoutesPage() {
     fetchRates();
   }, []);
 
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user?.username) return;
+
+    async function fetchBills() {
+      try {
+        setLoadingBills(true);
+
+        const response = await apiClient.get("/get-user-expenses", {
+          params: {
+            username: user?.username,
+            filter_by: "all",
+          },
+        });
+
+        const fetchedBills: Liability[] = response.data?.["user-expenses"] ?? [];
+        setBills(fetchedBills);
+
+        if (fetchedBills.length > 0) {
+          setSelectedBillId((current) => current ?? fetchedBills[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user bills:", error);
+      } finally {
+        setLoadingBills(false);
+      }
+    }
+
+    fetchBills();
+  }, [isLoaded, isSignedIn, user]);
+
+  const selectedBill = useMemo(() => {
+    return bills.find((bill) => bill.id === selectedBillId) ?? null;
+  }, [bills, selectedBillId]);
+
   const bestProvider = useMemo(() => {
     const entries = [
       { name: "crebit", rate: rates.crebit },
@@ -135,9 +174,9 @@ export default function TransferRoutesPage() {
     );
   }, [rates]);
 
-  const billAmountUsd = billAmountMap[selectedBill];
-
   const comparison = useMemo(() => {
+    if (!selectedBill) return null;
+
     const leftRate = rates[leftProvider];
     const rightRate = rates[rightProvider];
 
@@ -153,11 +192,15 @@ export default function TransferRoutesPage() {
     const leftFee = providerFeeMap[leftProvider];
     const rightFee = providerFeeMap[rightProvider];
 
-    const leftTotalBrl = billAmountUsd * leftRate + leftFee * leftRate;
-    const rightTotalBrl = billAmountUsd * rightRate + rightFee * rightRate;
+    const billAmountUsd = selectedBill.amount;
 
-    const winner =
-      leftTotalBrl <= rightTotalBrl ? leftProvider : rightProvider;
+    const leftNetUsd = Math.max(billAmountUsd - leftFee, 0);
+    const rightNetUsd = Math.max(billAmountUsd - rightFee, 0);
+
+    const leftTotalBrl = leftNetUsd * leftRate;
+    const rightTotalBrl = rightNetUsd * rightRate;
+
+    const winner = leftTotalBrl >= rightTotalBrl ? leftProvider : rightProvider;
 
     const savings = Math.abs(leftTotalBrl - rightTotalBrl);
 
@@ -171,7 +214,7 @@ export default function TransferRoutesPage() {
       winner,
       savings,
     };
-  }, [billAmountUsd, leftProvider, rightProvider, rates]);
+  }, [selectedBill, leftProvider, rightProvider, rates]);
 
   function formatRate(rate: number | null) {
     if (rate === null || Number.isNaN(rate)) {
@@ -342,24 +385,32 @@ export default function TransferRoutesPage() {
                 Compare Providers
               </h3>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Calculate the impact on a specific student bill using current
+                Calculate the impact on one of your actual bills using current
                 provider quotes.
               </p>
 
               <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="space-y-2">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Select Bill Type
+                    Select Bill
                   </label>
                   <select
-                    value={selectedBill}
-                    onChange={(e) => setSelectedBill(e.target.value as BillType)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-700 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    value={selectedBillId ?? ""}
+                    onChange={(e) => setSelectedBillId(Number(e.target.value))}
+                    disabled={loadingBills || bills.length === 0}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-700 focus:ring-blue-700 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   >
-                    <option value="tuition">{billLabelMap.tuition}</option>
-                    <option value="rent">{billLabelMap.rent}</option>
-                    <option value="utilities">{billLabelMap.utilities}</option>
-                    <option value="living">{billLabelMap.living}</option>
+                    {loadingBills ? (
+                      <option value="">Loading bills...</option>
+                    ) : bills.length === 0 ? (
+                      <option value="">No bills found</option>
+                    ) : (
+                      bills.map((bill) => (
+                        <option key={bill.id} value={bill.id}>
+                          {bill.name} (${bill.amount})
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 
@@ -400,7 +451,10 @@ export default function TransferRoutesPage() {
                     <thead>
                       <tr className="bg-slate-100 dark:bg-slate-800/80">
                         <th className="w-[34%] px-5 py-4 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                          Metric (for ${billAmountUsd.toLocaleString()} USD)
+                          Metric{" "}
+                          {selectedBill
+                            ? `(for $${selectedBill.amount.toLocaleString()} ${selectedBill.currency})`
+                            : ""}
                         </th>
 
                         <th
@@ -440,6 +494,18 @@ export default function TransferRoutesPage() {
                     </thead>
 
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
+                          Bill Name
+                        </td>
+                        <td className="px-5 py-4 text-sm">
+                          {selectedBill?.name ?? "--"}
+                        </td>
+                        <td className="px-5 py-4 text-sm">
+                          {selectedBill?.name ?? "--"}
+                        </td>
+                      </tr>
+
                       <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
                         <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
                           Exchange Rate
@@ -543,6 +609,18 @@ export default function TransferRoutesPage() {
                           }`}
                         >
                           {providerEtaMap[rightProvider]}
+                        </td>
+                      </tr>
+
+                      <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
+                          Due Date
+                        </td>
+                        <td className="px-5 py-4 text-sm">
+                          {selectedBill?.due_date ?? "--"}
+                        </td>
+                        <td className="px-5 py-4 text-sm">
+                          {selectedBill?.due_date ?? "--"}
                         </td>
                       </tr>
                     </tbody>
