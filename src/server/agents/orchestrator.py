@@ -11,7 +11,11 @@ def orchestrator_node(state: AuraState):
     """
     db = SessionLocal()
     try:
-        unpaid = db.query(Liability).filter(Liability.is_paid == False).all()
+        # 1. Fetch ALL unpaid actual liabilities
+        unpaid = db.query(Liability).filter(
+            Liability.is_paid == False, 
+            Liability.is_predicted == False
+        ).all()
 
         if not unpaid:
             print("🎖️ Orchestrator: No unpaid liabilities. Standing down.")
