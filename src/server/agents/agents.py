@@ -15,12 +15,14 @@ current_model_id = "gemini-2.5-flash"
 async def fx_strategist_node(state: AuraState):
     """
     Role 1: High-Conviction FX Strategist.
-    Uses Google Search Grounding instead of a fragile browser automation.
+    Uses a Two-Pass approach: 
+    1. Grounded Search for raw info.
+    2. JSON extraction for the state.
     """
-    print("🌐 FX Strategist: Searching the web for live market intelligence...")
+    print("🌐 FX Strategist: Researching live market data via Google Search...")
 
-    # We ask Gemini to use Google Search to find real-time data
-    search_prompt = (
+    # PASS 1: Grounded Search (Must be plain text)
+    search_query = (
         "1. Navigate to Yahoo Finance (BRL/USD=X) and extract the current exchange rate.\n"
         "2. Locate the Technical Analysis section or a chart to find the 14-day RSI value.\n"
         "3. Search Google News for 'Brazil economy news' to see if there is immediate volatility.\n"
@@ -29,22 +31,35 @@ async def fx_strategist_node(state: AuraState):
     )
 
     try:
-        # Use Google Search Grounding tool
-        response = client.models.generate_content(
+        # We DO NOT use response_mime_type here
+        search_response = client.models.generate_content(
             model=current_model_id,
-            contents=search_prompt,
+            contents=search_query,
             config=types.GenerateContentConfig(
-                tools=[{ "google_search": {} }],
+                tools=[{ "google_search": {} }]
+            )
+        )
+        raw_intelligence = search_response.text
+        
+        # PASS 2: JSON Distillation
+        # We feed the grounded research back to Gemini to get a clean JSON object
+        distill_prompt = (
+            f"Based on the following market research, extract the data into a JSON object.\n\n"
+            f"Research: {raw_intelligence}\n\n"
+            "Return ONLY a JSON object with keys: 'rate' (float), 'rsi' (float), 'trend' (string: BULLISH/BEARISH/NEUTRAL)."
+        )
+
+        distill_response = client.models.generate_content(
+            model=current_model_id,
+            contents=distill_prompt,
+            config=types.GenerateContentConfig(
                 response_mime_type="application/json"
             )
         )
-        
-        # Parse the structured JSON output
-        data = json.loads(response.text)
-        
+        data = json.loads(distill_response.text)
+
     except Exception as e:
-        print(f"⚠️ Search Grounding Error: {e}. Falling back to basic rate.")
-        # Minimal fallback if the search tool fails
+        print(f"⚠️ Market Research Error: {e}. Using safe fallback.")
         data = {"rate": 0.178, "trend": "NEUTRAL", "rsi": 50.0}
 
     print(f"📊 Market Insight: {data.get('trend')} | Rate: {data.get('rate')} | RSI: {data.get('rsi')}")
@@ -55,6 +70,7 @@ async def fx_strategist_node(state: AuraState):
     }
 
 def visionary_accountant_node(image_bytes: bytes, history_context: str = "No history available."):
+    """Uses Gemini 2.5 Flash to process financial documents."""
     model = client.models.generate_content(
         model=current_model_id,
         contents=[
