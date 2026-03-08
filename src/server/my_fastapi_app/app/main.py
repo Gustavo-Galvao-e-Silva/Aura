@@ -12,7 +12,7 @@ from agents.aura_graph import aura_graph
 
 from sqlalchemy.orm import Session
 
-from db.models import Base, CotationNotify, Liability, Users
+from db.models import Base, CotationNotify, Liability, Users, AuditLog
 from my_fastapi_app.app.db.session import engine, get_db
 
 from datetime import date, timedelta
@@ -396,3 +396,17 @@ async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
     db.add(target_quote)
     db.commit()
     db.refresh(target_quote)
+
+# --- NEW: VERIFICATION ENDPOINT ---
+@app.get("/verify-reasoning/{audit_hash}")
+async def verify_reasoning(audit_hash: str, db: Session = Depends(get_db)):
+    """Allows users to verify the reasoning committed to the blockchain."""
+    log_entry = db.query(AuditLog).filter(AuditLog.decision_hash == audit_hash).first()
+    if not log_entry:
+        raise HTTPException(status_code=404, detail="Audit trail not found")
+    return {
+        "status": "Verified",
+        "reasoning": log_entry.reasoning,
+        "timestamp": log_entry.timestamp,
+        "ledger_url": f"https://stellar.expert/explorer/testnet/tx/{audit_hash}"
+    }
