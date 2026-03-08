@@ -6,7 +6,6 @@ import {
   House,
   School,
   ScrollText,
-  Search,
   ShoppingCart,
   TrendingUp,
 } from "lucide-react";
@@ -54,6 +53,9 @@ export default function Dashboard() {
   const [latestRate, setLatestRate] = useState<number | null>(null);
   const [fxLoading, setFxLoading] = useState(true);
 
+  const [targetQuote, setTargetQuote] = useState("");
+  const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
+
   useEffect(() => {
     if (isLoaded && (!isSignedIn || !user)) {
       navigate("/");
@@ -61,9 +63,10 @@ export default function Dashboard() {
   }, [isLoaded, isSignedIn, user, navigate]);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !user) return;
+    if (!isLoaded || !isSignedIn || !user?.username) return;
 
     async function fetchUpcomingExpenses() {
+
       try {
         setExpensesLoading(true);
 
@@ -125,8 +128,55 @@ export default function Dashboard() {
     fetchFxData();
   }, []);
 
+  async function handleSubmitQuoteAlert() {
+  if (!user?.username) {
+    alert("No username found.");
+    return;
+  }
+
+  const parsedQuote = Number(targetQuote);
+
+  if (!targetQuote || Number.isNaN(parsedQuote) || parsedQuote <= 0) {
+    alert("Please enter a valid quotation.");
+    return;
+  }
+
+  const email =
+    user.primaryEmailAddress?.emailAddress ??
+    user.emailAddresses?.[0]?.emailAddress ??
+    null;
+
+  if (!email) {
+    alert("No email found for this account.");
+    return;
+  }
+
+  try {
+    setIsSubmittingQuote(true);
+
+    const response = await apiClient.post("/set-quote-alert", {
+      username: user.username,
+      email,
+      target_rate: parsedQuote,
+    });
+
+    console.log("Quote alert saved:", response.data);
+    alert("Quotation alert saved.");
+    setTargetQuote("");
+  } catch (error: any) {
+    console.error("Failed to save quotation alert:", error);
+    alert(
+      JSON.stringify(error?.response?.data ?? error?.message ?? error, null, 2)
+    );
+  } finally {
+    setIsSubmittingQuote(false);
+  }
+}
+
   const chartData = useMemo(() => {
-    if (fxSeries.length === 0) return { linePath: "", areaPath: "", labels: [], peak: null };
+    if (fxSeries.length === 0) {
+      return { linePath: "", areaPath: "", labels: [], peak: null as any };
+    }
 
     const width = 400;
     const height = 150;
@@ -224,17 +274,6 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="relative hidden md:block">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                  <Search className="h-5 w-5" />
-                </span>
-                <input
-                  className="w-64 rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm focus:border-blue-700 focus:ring-blue-700 dark:border-slate-800 dark:bg-slate-900"
-                  placeholder="Search transactions..."
-                  type="text"
-                />
-              </div>
-
               <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
                 <BellDot className="h-5 w-5" />
               </button>
@@ -259,7 +298,7 @@ export default function Dashboard() {
               <div className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="absolute right-0 top-0 -mr-8 -mt-8 h-24 w-24 rounded-full bg-blue-700/5 transition-transform group-hover:scale-110" />
                 <p className="mb-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  Available Balance
+                  Total Saved
                 </p>
                 <h3 className="text-3xl font-bold tracking-tight">$4,250.00</h3>
                 <div className="mt-4 flex items-center gap-2 text-sm font-medium text-emerald-500">
@@ -279,16 +318,27 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="flex flex-col justify-between rounded-xl bg-blue-700 p-6 text-white shadow-lg shadow-blue-700/20">
-                <div>
-                  <p className="mb-1 text-sm font-medium text-white/80">
-                    Exchange Reward Balance
-                  </p>
-                  <h3 className="text-3xl font-bold tracking-tight">840 pts</h3>
+              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <p className="mb-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                  Set Alert for Cotation
+                </p>
+                <input
+                  value={targetQuote}
+                  onChange={(e) => setTargetQuote(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-2xl font-bold tracking-tight focus:border-blue-700 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-800"
+                  placeholder="5.000"
+                  type="number"
+                  step="0.0001"
+                />
+                <div className="mt-4 flex items-center gap-2 text-sm font-medium text-amber-500">
+                  <button
+                    onClick={handleSubmitQuoteAlert}
+                    disabled={isSubmittingQuote}
+                    className="rounded-xl bg-blue-700 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-700/25 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
+                  >
+                    {isSubmittingQuote ? "Submitting..." : "Submit"}
+                  </button>
                 </div>
-                <button className="mt-4 w-full rounded-lg bg-white/20 py-2 text-sm font-semibold transition-colors hover:bg-white/30">
-                  Redeem Rewards
-                </button>
               </div>
             </div>
 

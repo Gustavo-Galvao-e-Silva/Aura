@@ -1,5 +1,11 @@
 import os
 import httpx
+from my_fastapi_app.app.services.mail_service import send_quote_alert_email
+from agents.state import AuraState
+from datetime import datetime
+from sqlalchemy.orm import Session
+from my_fastapi_app.app.db.session import SessionLocal
+from db.models import CotationNotify
 from agents.state import AuraState
 
 
@@ -166,8 +172,81 @@ def smart_router_node(state: AuraState):
     # Best route = highest BRL received for the same USD sent
     options = sorted(options, key=lambda x: x["brl_received"], reverse=True)
 
+    notify_users_if_quote_below_target(options)
     print(f"🛰️ Router: Calculated {len(options)} live provider routes")
-    print(options)
+    #print(options)
     return {
         "route_options": options,
     }
+
+
+def notify_users_if_quote_below_target(routes):
+    """
+    Looks at the lowest quotation among providers and sends email alerts
+    to users whose target_rate is >= current lowest quote.
+    """
+
+    if not routes:
+        print("📭 Notify: No route options available.")
+        return {"notifications_sent": 0}
+
+    valid_routes = [
+        route for route in routes
+        if route.get("fx_used") is not None
+    ]
+
+    if not valid_routes:
+        print("📭 Notify: No valid fx quotations available.")
+        return {"notifications_sent": 0}
+
+    # get max rate
+    max_route = max(valid_routes, key=lambda r: r["fx_used"])
+    max_rate = float(max_route["fx_used"])
+    provider_name = max_route["name"]
+    db: Session = SessionLocal()
+    try:
+        alerts = (
+            db.query(CotationNotify)
+            .filter(
+                CotationNotify.rate <= max_rate,
+            )
+            .all()
+        )
+
+        if not alerts:
+            print(f"📭 Notify: No users to notify. Lowest rate = {max_rate:.4f}")
+            return {"notifications_sent": 0}
+
+        notifications_sent = 0
+
+        for alert in alerts:
+            try:
+                send_quote_alert_email(
+                    to_email=alert.email,
+                    current_rate=max_rate,
+                    target_rate=alert.rate,
+                    provider=provider_name,
+                )
+
+                alert.has_notified = True
+                notifications_sent += 1
+
+                print(
+                    f"✅ Notify: Sent alert to {alert.email} "
+                    f"(target={alert.rate:.4f}, current={max_rate:.4f})"
+                )
+
+            except Exception as e:
+                print(f"⚠️ Notify: Failed to send email to {alert.email}: {e}")
+
+        db.commit()
+
+        return {
+            "notifications_sent": notifications_sent,
+            "lowest_rate": max_rate,
+            "lowest_provider": provider_name,
+        }
+
+    finally:
+        db.close()
+    

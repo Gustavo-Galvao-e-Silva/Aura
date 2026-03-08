@@ -12,7 +12,7 @@ from agents.aura_graph import aura_graph
 
 from sqlalchemy.orm import Session
 
-from db.models import Base, Liability, Users
+from db.models import Base, CotationNotify, Liability, Users
 from my_fastapi_app.app.db.session import engine, get_db
 
 from datetime import date, timedelta
@@ -39,6 +39,12 @@ class CreateExpenseDTO(BaseModel):
     currency: Literal["USD", "BRL"]
     due_date: str
     category: str
+
+
+class QuoteAlertDTO(BaseModel):
+    username: str
+    email: str
+    target_rate: float
 
 
 app.add_middleware(
@@ -395,4 +401,20 @@ async def get_fx_provider_rates():
             }
 
     return parsed
+
+
+@app.post("/set-quote-alert")
+async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
+
+    target_quote = CotationNotify(
+        username=data.username,
+        email=data.email,
+        rate=data.target_rate
+    )
+
+    db.add(target_quote)
+    db.commit()
+    db.refresh(target_quote)
+
+
  

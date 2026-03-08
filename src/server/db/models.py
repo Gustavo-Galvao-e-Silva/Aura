@@ -36,3 +36,13 @@ class Users(Base):
     fullname = Column(String, nullable=False)
     username = Column(String, unique=True, nullable=False, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
+
+class CotationNotify(Base):
+    __tablename__ = "cotation_notify"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    username = Column(String, nullable=False, index=True) 
+    rate = Column(Float)
+    email = Column(String, unique=True, nullable=False, index=True)
+    has_notified = Column(Boolean, default=False)
+    
