@@ -127,11 +127,12 @@ async def upload_invoice(
 
 @app.get("/get-user-expenses")
 async def get_user_expenses(
+    username: str = Query(...),
     filter_by: Literal["all", "upcoming", "paid", "overdue", "predicted"] = Query("all"),
     limit: int | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Liability)
+    query = db.query(Liability).filter(Liability.username == username)
 
     if filter_by == "all":
         query = query.filter(Liability.is_predicted == False)
@@ -167,7 +168,6 @@ async def get_user_expenses(
     past_liabilities = query.all()
 
     return {"user-expenses": past_liabilities}
-
 
 @app.post("/post-create-user")
 async def post_create_user(
