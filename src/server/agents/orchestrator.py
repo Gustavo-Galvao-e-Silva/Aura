@@ -11,7 +11,10 @@ def orchestrator_node(state: AuraState):
     """
     db = SessionLocal()
     try:
-        unpaid = db.query(Liability).filter(Liability.is_paid == False).all()
+        # 1. Fetch ALL unpaid liabilities (both actual and predicted)
+        unpaid = db.query(Liability).filter(
+            Liability.is_paid == False
+        ).all()
 
         if not unpaid:
             print("🎖️ Orchestrator: No unpaid liabilities.")
@@ -21,13 +24,13 @@ def orchestrator_node(state: AuraState):
         routes = state.get("route_options", [])
         crebit_route = next((r for r in routes if r["name"] == "Crebit"), None)
         market_signal = state.get("market_prediction")
-        
+
         decisions_list = []
         top_alert = None
 
         for bill in unpaid:
             days_until_due = (bill.due_date - date.today()).days
-            
+
             # --- STRUCTURED DECISION LOGIC ---
             pay_now = False
             reason = "Market is neutral/bearish and deadline is far. Waiting for better conditions."
@@ -54,20 +57,22 @@ def orchestrator_node(state: AuraState):
                 "liability_id": bill.id,
                 "name": bill.name,
                 "amount_usd": bill.amount,
+                "is_predicted": bill.is_predicted, # Added prediction flag
                 "pay": pay_now,
                 "reason": reason,
                 "cost_estimate_brl": cost_details.get("estimated_brl", 0.0)
             })
 
             # Prepare the string for the main selected_route alert (Top priority)
-            if pay_now and not top_alert:
+            # We prioritize actual bills over predicted ones for the top alert message
+            if pay_now and not top_alert and not bill.is_predicted:
                 top_alert = (
                     f"🚀 Aura Recommendation: {reason}\n"
                     f"Pay {bill.name} (${bill.amount:.2f}) via {crebit_route['name']} "
                     f"for R${cost_details.get('estimated_brl', 0.0):.2f}."
                 )
 
-        print(f"✅ Orchestrator processed {len(decisions_list)} bills.")
+        print(f"✅ Orchestrator processed {len(decisions_list)} bills (including predictions).")
 
         return {
             "payment_decisions": decisions_list,
