@@ -8,6 +8,12 @@ from PIL import Image
 from agents.state import AuraState
 from agents.prompts import get_visionary_accountant_prompt
 
+from datetime import datetime, timedelta
+
+CACHE_EXPIRY_MINUTES = 60
+last_fx_data = None
+last_fx_update = None
+
 # 1. Initialize the standard Client
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 current_model_id = "gemini-2.5-flash"
@@ -19,6 +25,19 @@ async def fx_strategist_node(state: AuraState):
     1. Grounded Search for raw info.
     2. JSON extraction for the state.
     """
+    global last_fx_data, last_fx_update
+
+    now = datetime.now()
+
+    if last_fx_data and last_fx_update:
+        age = (now - last_fx_update).total_seconds() / 60
+        if age < CACHE_EXPIRY_MINUTES:
+            print(f"♻️ FX Strategist: Using cached market data ({int(age)}m old)")
+            return {
+                "current_fx_rate": last_fx_data.get("rate", state["current_fx_rate"]),
+                "market_prediction": last_fx_data.get("trend", "NEUTRAL"),
+            }
+
     print("🌐 FX Strategist: Researching live market data via Google Search...")
 
     # PASS 1: Grounded Search (Must be plain text)
@@ -58,8 +77,14 @@ async def fx_strategist_node(state: AuraState):
         )
         data = json.loads(distill_response.text)
 
+        last_fx_data = data
+        last_fx_update = now
+
     except Exception as e:
-        print(f"⚠️ Market Research Error: {e}. Using safe fallback.")
+        if "429" in str(e):
+            print("⚠️ Quota Exhausted! Falling back to safe hardcoded rate for stability.")
+        else:
+            print(f"⚠️ Market Research Error: {e}. Using safe fallback.")
         data = {"rate": 0.178, "trend": "NEUTRAL", "rsi": 50.0}
 
     print(f"📊 Market Insight: {data.get('trend')} | Rate: {data.get('rate')} | RSI: {data.get('rsi')}")
