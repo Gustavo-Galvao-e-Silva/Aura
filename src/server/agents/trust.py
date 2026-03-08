@@ -3,29 +3,47 @@ import json
 import os
 from stellar_sdk import Server, Keypair, TransactionBuilder, Network, Asset
 from agents.state import AuraState
+from my_fastapi_app.app.db.session import SessionLocal
+from db.models import AuditLog
 
 def trust_engine_node(state: AuraState):
     """
     Role 3: The Trust Engine.
-    Creates a 'Proof of Reason' by hashing decisions and posting to the Stellar Ledger.
+    Creates an immutable audit trail on Stellar and PERSISTS reasoning to Postgres.
     """
-    # 1. Create the Audit Payload (The "Proof of Reason")
+    # 1. Create the Audit Payload (Proof of Reason)
+    # We use the human-readable 'selected_route' as the core reasoning
+    reasoning_text = state.get("selected_route") or "No action recommended."
+    
     decision_payload = {
         "market_prediction": state.get("market_prediction"),
         "current_fx_rate": state.get("current_fx_rate"),
-        "reasoning_sent": state.get("selected_route"),
-        "structured_decisions": state.get("payment_decisions")
+        "reasoning": reasoning_text,
+        "payment_decisions": state.get("payment_decisions")
     }
     
     # Generate the SHA-256 hash
     dumped_data = json.dumps(decision_payload, sort_keys=True)
     audit_hash = hashlib.sha256(dumped_data.encode()).hexdigest()
     
-    print(f"🔐 Local Audit Hash generated: {audit_hash}")
+    # 2. PERSIST TO POSTGRES (Fixes the empty table issue)
+    db = SessionLocal()
+    try:
+        new_log = AuditLog(
+            decision_hash=audit_hash,
+            reasoning=reasoning_text # This is what the user will "verify"
+        )
+        db.add(new_log)
+        db.commit()
+        print(f"🔐 Local Audit Log saved to Postgres: {audit_hash[:10]}...")
+    except Exception as e:
+        print(f"⚠️ Failed to save audit log to DB: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
-    # 2. Submit to Stellar Testnet
+    # 3. Submit to Stellar Testnet
     secret_key = os.getenv("STELLAR_SECRET_KEY")
-    
     if not secret_key:
         print("⚠️ STELLAR_SECRET_KEY missing in .env. Skipping blockchain submission.")
         return {"audit_hash": audit_hash}
@@ -55,10 +73,8 @@ def trust_engine_node(state: AuraState):
         )
 
         transaction.sign(source_keypair)
-        response = server.submit_transaction(transaction)
-        
-        ledger_url = f"https://stellar.expert/explorer/testnet/tx/{response['hash']}"
-        print(f"🚀 Proof of Reason stored on Ledger: {ledger_url}")
+        server.submit_transaction(transaction)
+        print(f"🚀 Proof of Reason stored on Ledger.")
         
     except Exception as e:
         # Improved error logging to catch specific SDK issues
