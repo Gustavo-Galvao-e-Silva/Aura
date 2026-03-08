@@ -34,25 +34,23 @@ def orchestrator_node(state: AuraState):
                 reason = "Market is BULLISH (BRL is strong). Buying now may save money."
             elif days_until_due <= 3:
                 should_act = True
-                reason = f"Deadline approach: {bill.name} is due in {days_until_due} days."
+                reason = f"Deadline approach: {bill.name} is due in {max(0, days_until_due)} days."
 
             if should_act and crebit_route:
                 # scale provider output from reference_usd to actual bill amount
-                reference_usd = crebit_route.get("reference_usd", 1000.0)
                 fx_used = crebit_route.get("fx_used", 0.0)
                 fee_usd = crebit_route.get("fee_usd", 0.0)
-                eta_hours = crebit_route.get("eta_hours", "unknown")
+                eta_hours = crebit_route.get("eta_hours", "24")
 
-                net_usd = max(bill.amount - fee_usd, 0)
-                estimated_brl_received = net_usd * fx_used
+                actual_brl_cost = (bill.amount + fee_usd) * fx_used
 
                 alert_msg = (
                     f"🚀 Aura Action: {reason}\n"
                     f"Bill: {bill.name} (${bill.amount:.2f})\n"
-                    f"Rec: Use {crebit_route['name']} to save vs banks.\n"
-                    f"Rate: {fx_used:.4f} BRL/USD\n"
+                    f"Rec: Use {crebit_route['name']} via our optimized rail.\n"
+                    f"Current Rate: {fx_used:.4f} BRL/USD\n"
                     f"Fee: ${fee_usd:.2f}\n"
-                    f"Estimated BRL received: R${estimated_brl_received:.2f}\n"
+                    f"Total Cost: R${actual_brl_cost:.2f}\n"
                     f"ETA: {eta_hours}hr."
                 )
 
