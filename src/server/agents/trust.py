@@ -10,6 +10,7 @@ def trust_engine_node(state: AuraState):
     """
     Role 3: The Trust Engine.
     Creates an immutable audit trail on Stellar and PERSISTS reasoning to Postgres.
+    Optimized: Skips submission if the current market state hash already exists.
     """
     # 1. Create the Audit Payload (Proof of Reason)
     # We use the human-readable 'selected_route' as the core reasoning
@@ -26,9 +27,16 @@ def trust_engine_node(state: AuraState):
     dumped_data = json.dumps(decision_payload, sort_keys=True)
     audit_hash = hashlib.sha256(dumped_data.encode()).hexdigest()
     
-    # 2. PERSIST TO POSTGRES (Fixes the empty table issue)
+    # 2. CHECK FOR EXISTING HASH (Optimization)
     db = SessionLocal()
     try:
+        existing_log = db.query(AuditLog).filter(AuditLog.decision_hash == audit_hash).first()
+        
+        if existing_log:
+            print(f"♻️ Trust Engine: Audit for hash {audit_hash[:10]} already exists. Skipping duplicate ledger entry.")
+            return {"audit_hash": audit_hash}
+            
+        # 3. PERSIST TO POSTGRES (If new)
         new_log = AuditLog(
             decision_hash=audit_hash,
             reasoning=reasoning_text # This is what the user will "verify"
@@ -37,12 +45,13 @@ def trust_engine_node(state: AuraState):
         db.commit()
         print(f"🔐 Local Audit Log saved to Postgres: {audit_hash[:10]}...")
     except Exception as e:
-        print(f"⚠️ Failed to save audit log to DB: {e}")
+        print(f"⚠️ Database Error in Trust Engine: {e}")
         db.rollback()
+        return {"audit_hash": audit_hash}
     finally:
         db.close()
 
-    # 3. Submit to Stellar Testnet
+    # 4. Submit to Stellar Testnet (Only if hash is new)
     secret_key = os.getenv("STELLAR_SECRET_KEY")
     if not secret_key:
         print("⚠️ STELLAR_SECRET_KEY missing in .env. Skipping blockchain submission.")
