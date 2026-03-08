@@ -2,11 +2,13 @@ import os
 import io
 import json
 import requests
+from pydantic import BaseModel
 from google import genai
 from google.genai import types
 from PIL import Image
 from agents.state import AuraState
 from agents.prompts import get_visionary_accountant_prompt
+from browser_use_sdk.v3 import AsyncBrowserUse, BrowserUseError
 
 from datetime import datetime, timedelta
 # --- CACHE CONFIGURATION ---
@@ -16,6 +18,16 @@ CACHE_EXPIRY_MINUTES = 120
 last_fx_data = None
 last_fx_update = None
 
+# Define your expected output structure
+class FXData(BaseModel):
+    rate: float
+    rsi: float
+    trend: str
+    conviction_score: int
+
+# Initialize Browser Use Client
+bu_client = AsyncBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
+
 # 1. Initialize the standard Client
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 current_model_id = "gemini-3.1-flash-lite-preview"
@@ -23,10 +35,7 @@ current_model_id = "gemini-3.1-flash-lite-preview"
 async def fx_strategist_node(state: AuraState):
     """
     Role 1: High-Conviction FX Strategist.
-    Uses a Two-Pass approach: 
-    1. Grounded Search for raw info.
-    2. JSON extraction for the state.
-    Includes caching to prevent 429 Resource Exhausted errors.
+    Uses Browser Use to interact with Yahoo Finance directly.
     """
     global last_fx_data, last_fx_update
 
@@ -42,10 +51,10 @@ async def fx_strategist_node(state: AuraState):
                 "market_prediction": last_fx_data.get("trend", "NEUTRAL"),
             }
 
-    print("🌐 FX Strategist: Researching live market data via Google Search...")
+    print("🌐 FX Strategist: Researching live market data via Browser Use Agent...")
 
-    # PASS 1: Grounded Search (Must be plain text)
-    search_query = (
+    # Define the exact task for the browser agent
+    task_prompt = (
         "1. Navigate to Yahoo Finance (BRL/USD=X) and extract the current exchange rate.\n"
         "2. Locate the Technical Analysis section or a chart to find the 14-day RSI value.\n"
         "3. Search Google News for 'Brazil economy news' to see if there is immediate volatility.\n"
@@ -54,41 +63,31 @@ async def fx_strategist_node(state: AuraState):
     )
 
     try:
-        # We DO NOT use response_mime_type here
-        search_response = client.models.generate_content(
-            model=current_model_id,
-            contents=search_query,
-            config=types.GenerateContentConfig(
-                tools=[{ "google_search": {} }]
-            )
+        # The agent will browse the web and return the data formatted as our Pydantic model
+        result = await bu_client.run(
+            task_prompt, 
+            output_schema=FXData,
+            model="bu-max" # Use bu-max for complex navigation
         )
-        raw_intelligence = search_response.text
         
-        # PASS 2: JSON Distillation
-        distill_prompt = (
-            f"Based on the following market research, extract the data into a JSON object.\n\n"
-            f"Research: {raw_intelligence}\n\n"
-            "Return ONLY a JSON object with keys: 'rate' (float), 'rsi' (float), 'trend' (string: BULLISH/BEARISH/NEUTRAL)."
-        )
-
-        distill_response = client.models.generate_content(
-            model=current_model_id,
-            contents=distill_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
-        )
-        data = json.loads(distill_response.text)
+        # result.output is automatically parsed into your FXData Pydantic model
+        fx_info = result.output
+        
+        data = {
+            "rate": fx_info.rate,
+            "rsi": fx_info.rsi,
+            "trend": fx_info.trend,
+            "conviction_score": fx_info.conviction_score
+        }
 
         # Update cache on success
         last_fx_data = data
         last_fx_update = now
 
+        print(f"💰 Cost for this run: {result.total_cost_usd}")
+
     except Exception as e:
-        if "429" in str(e):
-            print("⚠️ Quota Exhausted! Falling back to safe hardcoded rate for stability.")
-        else:
-            print(f"⚠️ Market Research Error: {e}. Using safe fallback.")
+        print(f"⚠️ Market Research Error: {e}. Using safe fallback.")
         data = {"rate": 0.178, "trend": "NEUTRAL", "rsi": 50.0}
 
     print(f"📊 Market Insight: {data.get('trend')} | Rate: {data.get('rate')} | RSI: {data.get('rsi')}")
