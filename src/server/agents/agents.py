@@ -39,14 +39,7 @@ async def fx_strategist_node(state: AuraState):
     """
     global last_fx_data, last_fx_update
 
-    now = None
-    try:
-        with open("now.pkl", "rb") as f:
-            now = pickle.load(f)
-    except: pass
-    if now == None: now = datetime.now()
-    with open("now.pkl", "wb") as f:
-        pickle.dump(now, f)
+    now = datetime.now()
 
     # 1. Check if we have valid cached data
     if last_fx_data and last_fx_update:
