@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 import os
 from fastapi import FastAPI, Depends, File, HTTPException, UploadFile, Form
@@ -25,8 +28,6 @@ from sqlalchemy.orm import Session
 import os
 import httpx
 
-from dotenv import load_dotenv
-load_dotenv()
 
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
 
