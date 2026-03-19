@@ -8,7 +8,15 @@ from google.genai import types
 from PIL import Image
 from agents.state import AuraState
 from agents.prompts import get_visionary_accountant_prompt
-from browser_use_sdk.v3 import AsyncBrowserUse, BrowserUseError
+from typing import Optional
+
+try:
+    from browser_use_sdk.v3 import AsyncBrowserUse, BrowserUseError
+except ImportError:
+    AsyncBrowserUse = None
+
+    class BrowserUseError(Exception):
+        pass
 
 from datetime import datetime, timedelta
 # --- CACHE CONFIGURATION ---
@@ -25,11 +33,15 @@ class FXData(BaseModel):
     trend: str
     conviction_score: int
 
-# Initialize Browser Use Client
-bu_client = AsyncBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
+# Initialize Browser Use Client only if dependency and API key are available.
+bu_client: Optional[AsyncBrowserUse] = None
+browser_use_api_key = os.getenv("BROWSER_USE_API_KEY")
+if AsyncBrowserUse is not None and browser_use_api_key:
+    bu_client = AsyncBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
 
-# 1. Initialize the standard Client
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+# Initialize Gemini client only when API key exists.
+google_api_key = os.getenv("GOOGLE_API_KEY")
+client = genai.Client(api_key=google_api_key) if google_api_key else None
 current_model_id = "gemini-3.1-flash-lite-preview"
 
 async def fx_strategist_node(state: AuraState):
@@ -50,6 +62,14 @@ async def fx_strategist_node(state: AuraState):
                 "current_fx_rate": last_fx_data.get("rate", state["current_fx_rate"]),
                 "market_prediction": last_fx_data.get("trend", "NEUTRAL"),
             }
+
+    if bu_client is None:
+        print("⚠️ browser_use_sdk not installed. Using safe fallback.")
+        data = {"rate": 0.178, "trend": "NEUTRAL", "rsi": 50.0}
+        return {
+            "current_fx_rate": data.get("rate", state["current_fx_rate"]),
+            "market_prediction": data.get("trend", "NEUTRAL"),
+        }
 
     print("🌐 FX Strategist: Researching live market data via Browser Use Agent...")
 
@@ -99,6 +119,10 @@ async def fx_strategist_node(state: AuraState):
 
 def visionary_accountant_node(image_bytes: bytes, history_context: str = "No history available."):
     """Uses Gemini 2.5 Flash to process financial documents."""
+    if client is None:
+        print("Visionary Accountant Error: GOOGLE_API_KEY is not configured.")
+        return None
+
     try:
         response = client.models.generate_content(
             model=current_model_id,

@@ -1,5 +1,5 @@
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import {ClerkProvider, Show, RedirectToSignIn } from "@clerk/react-router";
 import "./index.css";
 import FinGlobalLandingPage from "./pages/LandingPage";
@@ -27,8 +27,22 @@ ReactDOM.createRoot(root).render(
     <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
       <Routes>
         <Route path="/" element={<FinGlobalLandingPage />} />
-        <Route path="/register" element={<FinGlobalRegisterPage />} />
-        <Route path="/login" element={<FinGlobalLoginPage />} />
+        <Route
+          path="/register"
+          element={
+            <Show when="signed-out" fallback={<Navigate to="/dashboard" replace />}>
+              <FinGlobalRegisterPage />
+            </Show>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <Show when="signed-out" fallback={<Navigate to="/dashboard" replace />}>
+              <FinGlobalLoginPage />
+            </Show>
+          }
+        />
 
         <Route
           path="/dashboard"
