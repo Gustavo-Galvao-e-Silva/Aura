@@ -1,4 +1,5 @@
-# Use postgres/example user/password credentials
+# PostgreSQL database and Adminer (database UI)
+# Configure credentials in .env file
 
 services:
 
@@ -14,7 +15,9 @@ services:
     #    tmpfs:
     #      size: 134217728 # 128*2^20 bytes = 128Mb
     environment:
-      POSTGRES_PASSWORD: example
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-revellio}
     ports:
       - "5432:5432"
 
