@@ -9,7 +9,7 @@ export default function Navbar(){
             <div className="flex items-center gap-3 p-6">
                 <div className="p-1.5  rounded-lg text-white">
                   <span className="material-symbols-outlined block">
-                    <img className="w-[70px] h-[60px]" src="Untitled(1).png"/> 
+                    <img className="w-[70px] h-[60px]" src="logo.png"/> 
                   </span>
                 </div>
                 <div>

@@ -122,7 +122,7 @@ export default function FinGlobalRegisterPage() {
       <header className="sticky top-0 z-50 flex w-full items-center justify-between border-b border-slate-200 bg-white/80 px-6 py-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/80">
         <div className="flex items-center gap-2 text-blue-700 p-x-[20px]">
           <div className="flex size-8 items-center justify-center rounded-lg text-white">
-            <img className="min-w-[40px] h-[50px]" src="Untitled(1).png"/> 
+            <img className="min-w-[40px] h-[50px]" src="logo.png"/> 
           </div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Revellio

@@ -66,9 +66,9 @@ const providerBorderMap: Record<ProviderKey, string> = {
 };
 
 const providerLogoMap: Record<ProviderKey, string> = {
-  crebit: "./original.png",
-  wise: "./images.png",
-  remitly: "./unnamed.png",
+  crebit: "./crebit-logo.png",
+  wise: "./wise-logo.png",
+  remitly: "./remitly-logo.png",
 };
 
 export default function TransferRoutesPage() {
