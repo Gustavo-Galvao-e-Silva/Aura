@@ -1,2 +1,2 @@
-simplest-pytorch-cuda-support-shell.nix
+shell.nix
 *.jpeg
