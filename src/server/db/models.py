@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Float, Date, Boolean, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Float, Date, Boolean, DateTime, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
@@ -28,6 +28,8 @@ class AuditLog(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     decision_hash = Column(String, unique=True) # The hash for the Stellar Ledger
     reasoning = Column(String)                  # The "Proof of Reason" text
+
+    stellar_tx_id = Column(String, nullable=True)
 
 class Users(Base):
     __tablename__ = "users"

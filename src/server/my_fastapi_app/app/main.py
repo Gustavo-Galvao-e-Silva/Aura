@@ -1,18 +1,25 @@
 import asyncio
 import os
+from pathlib import Path
 from fastapi import FastAPI, Depends, File, HTTPException, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Literal, Optional
+from dotenv import load_dotenv
+
+# Load env vars before importing modules that read os.getenv at import time.
+SERVER_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(SERVER_ROOT / ".env")
+load_dotenv()
 
 from agents.state import AuraState
 from agents.agents import visionary_accountant_node
-
 from agents.aura_graph import aura_graph
 
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, func # Add this import at the top
 
-from db.models import Base, CotationNotify, Liability, Users
+from db.models import Base, CotationNotify, Liability, Users, AuditLog
 from my_fastapi_app.app.db.session import engine, get_db
 
 from datetime import date, timedelta
@@ -21,13 +28,22 @@ from typing import Literal
 from fastapi import Depends, Query
 from sqlalchemy.orm import Session
 
-import os
 import httpx
 
-from dotenv import load_dotenv
-load_dotenv()
-
 app = FastAPI(title="Aura: Global Finance Co-Pilot")
+
+
+def normalize_username(username: str) -> str:
+    return username.strip().lower()
+
+
+def normalize_currency(currency: str) -> str:
+    return currency.strip().upper()
+
+
+def get_user_case_insensitive(db: Session, username: str) -> Users | None:
+    normalized_username = normalize_username(username)
+    return db.query(Users).filter(func.lower(Users.username) == normalized_username).first()
 
 class CreateUserDTO(BaseModel):
     fullName: str
@@ -38,7 +54,7 @@ class CreateExpenseDTO(BaseModel):
     username: str
     name: str
     amount: float
-    currency: Literal["USD", "BRL"]
+    currency: Literal["USD", "BRL", "usd", "brl"]
     due_date: str
     category: str
 
@@ -52,7 +68,7 @@ class UpdateExpenseDTO(BaseModel):
     username: str
     name: str
     amount: float
-    currency: Literal["USD", "BRL"]
+    currency: Literal["USD", "BRL", "usd", "brl"]
     due_date: str
     category: str
     is_paid: bool
@@ -108,11 +124,17 @@ async def upload_invoice(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    normalized_username = normalize_username(username)
+    user = get_user_case_insensitive(db, normalized_username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    canonical_username = user.username
     image_bytes = await file.read()
 
     past_liabilities = (
         db.query(Liability)
-        .filter(Liability.username == username)
+        .filter(func.lower(Liability.username) == normalized_username)
         .limit(10)
         .all()
     )
@@ -130,10 +152,12 @@ async def upload_invoice(
         return {"status": "error", "message": "Extraction failed"}
 
     for item in extraction_result.get("actual_liabilities", []):
-        db.add(Liability(**item, username=username, is_predicted=False))
+        item["currency"] = normalize_currency(item.get("currency", "USD"))
+        db.add(Liability(**item, username=canonical_username, is_predicted=False))
 
     for item in extraction_result.get("predicted_liabilities", []):
-        db.add(Liability(**item, username=username, is_predicted=True))
+        item["currency"] = normalize_currency(item.get("currency", "USD"))
+        db.add(Liability(**item, username=canonical_username, is_predicted=True))
 
     db.commit()
 
@@ -151,7 +175,8 @@ async def get_user_expenses(
     limit: int | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Liability).filter(Liability.username == username)
+    username = normalize_username(username)
+    query = db.query(Liability).filter(func.lower(Liability.username) == username)
 
     if filter_by == "all":
         query = query.filter(Liability.is_predicted == False)
@@ -193,9 +218,14 @@ async def post_create_user(
     data: CreateUserDTO,
     db: Session = Depends(get_db),
 ):
+    normalized_username = normalize_username(data.username)
+    existing_user = db.query(Users).filter(func.lower(Users.username) == normalized_username).first()
+    if existing_user:
+        raise HTTPException(status_code=409, detail="Username already exists")
+
     new_user = Users(
         fullname=data.fullName,
-        username=data.username,
+        username=normalized_username,
         email=data.email,
     )
 
@@ -213,7 +243,7 @@ async def get_expense_stats(
     query = db.query(Liability).filter(Liability.is_predicted == False)
 
     if username:
-        query = query.filter(Liability.username == username)
+        query = query.filter(func.lower(Liability.username) == normalize_username(username))
 
     all_expenses = query.all()
     today = date.today()
@@ -246,18 +276,21 @@ async def post_create_expense(
     data: CreateExpenseDTO,
     db: Session = Depends(get_db),
 ):
+    normalized_username = normalize_username(data.username)
+    normalized_currency = normalize_currency(data.currency)
+
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-    user = db.query(Users).filter(Users.username == data.username).first()
+    user = get_user_case_insensitive(db, normalized_username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     new_liability = Liability(
-        username=data.username,
+        username=user.username,
         name=data.name,
         amount=data.amount,
-        currency=data.currency,
+        currency=normalized_currency,
         due_date=data.due_date,
         category=data.category,
         is_predicted=False,
@@ -412,22 +445,25 @@ async def update_expense(
     data: UpdateExpenseDTO,
     db: Session = Depends(get_db),
 ):
+    normalized_username = normalize_username(data.username)
+    normalized_currency = normalize_currency(data.currency)
+
     expense = db.query(Liability).filter(Liability.id == expense_id).first()
 
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
 
-    user = db.query(Users).filter(Users.username == data.username).first()
+    user = get_user_case_insensitive(db, normalized_username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-    expense.username = data.username
+    expense.username = user.username
     expense.name = data.name
     expense.amount = data.amount
-    expense.currency = data.currency
+    expense.currency = normalized_currency
     expense.due_date = data.due_date
     expense.category = data.category
     expense.is_paid = data.is_paid
@@ -445,14 +481,51 @@ async def update_expense(
     username: str | None = Query(None),
     db: Session = Depends(get_db)
 ):
+    normalized_username = normalize_username(username) if username else None
     
-    count = db.query(Liability).filter(Liability.is_predicted == False, Liability.username == username).count()
+    count = db.query(Liability).filter(
+        Liability.is_predicted == False,
+        func.lower(Liability.username) == normalized_username,
+    ).count()
     next_liability = db.query(Liability).filter(     
             Liability.is_predicted == False,
-            Liability.username == username,
+            func.lower(Liability.username) == normalized_username,
             Liability.is_paid == False).order_by(Liability.due_date).first()
 
     return {
         "count": count,
         "next_liability": next_liability
+    }
+
+@app.get("/verify-reasoning/{identifier}")
+async def verify_reasoning(identifier: str, db: Session = Depends(get_db)):
+    """
+    Flexible Verification: 
+    Lookup by either the Audit Hash (data) or Stellar TX ID (ledger).
+    """
+    # Search for the identifier in BOTH the decision_hash and stellar_tx_id columns
+    log_entry = db.query(AuditLog).filter(
+        or_(
+            AuditLog.decision_hash == identifier,
+            AuditLog.stellar_tx_id == identifier
+        )
+    ).first()
+    
+    if not log_entry:
+        raise HTTPException(
+            status_code=404, 
+            detail="Audit trail not found. Ensure you are using a valid Hash or Transaction ID."
+        )
+
+    # Always prefer the real Stellar TX ID for the link if it exists
+    link_id = log_entry.stellar_tx_id or log_entry.decision_hash
+    
+    return {
+        "status": "Verified",
+        "timestamp": log_entry.timestamp,
+        "reasoning": log_entry.reasoning,
+        "audit_hash": log_entry.decision_hash,
+        "stellar_tx_id": log_entry.stellar_tx_id,
+        "ledger_url": f"https://stellar.expert/explorer/testnet/tx/{link_id}",
+        "message": "This decision is cryptographically locked on the Stellar Public Ledger."
     }
