@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 # We store the last update time in memory to stay under the 20 RPD limit.
 # For a 20 RPD limit (with 2 calls per pass), 120 minutes is a safe interval.
 CACHE_EXPIRY_MINUTES = 120 
+CACHE_FILE_PATH = "fx_cache.json"
 last_fx_data = None
 last_fx_update = None
 
@@ -37,23 +38,32 @@ async def fx_strategist_node(state: AuraState):
     Role 1: High-Conviction FX Strategist.
     Uses Browser Use to interact with Yahoo Finance directly.
     """
-    global last_fx_data, last_fx_update
-
     now = datetime.now()
 
-    # 1. Check if we have valid cached data
-    if last_fx_data and last_fx_update:
-        age = (now - last_fx_update).total_seconds() / 60
-        if age < CACHE_EXPIRY_MINUTES:
-            print(f"♻️ FX Strategist: Using cached market data ({int(age)}m old)")
-            return {
-                "current_fx_rate": last_fx_data.get("rate", state["current_fx_rate"]),
-                "market_prediction": last_fx_data.get("trend", "NEUTRAL"),
-            }
+    # 1. Check if the physical cache file exists and load it
+    if os.path.exists(CACHE_FILE_PATH):
+        try:
+            with open(CACHE_FILE_PATH, "r") as f:
+                cached_content = json.load(f)
+            
+            # Parse the saved timestamp
+            last_update = datetime.fromisoformat(cached_content["timestamp"])
+            age = (now - last_update).total_seconds() / 60
 
+            # If it's fresh, use it and RETURN immediately
+            if age < CACHE_EXPIRY_MINUTES:
+                print(f"♻️ FX Strategist: Using FILE cached market data ({int(age)}m old)")
+                cached_data = cached_content["data"]
+                return {
+                    "current_fx_rate": cached_data.get("rate", state.get("current_fx_rate", 0.0)),
+                    "market_prediction": cached_data.get("trend", "NEUTRAL"),
+                }
+        except Exception as e:
+            print(f"⚠️ Cache Read Error: {e}. Falling back to live fetch.")
+
+    # 2. If we get here, the cache is missing or expired. Fetch live!
     print("🌐 FX Strategist: Researching live market data via Browser Use Agent...")
 
-    # Define the exact task for the browser agent
     task_prompt = (
         "1. Navigate to Yahoo Finance (BRL/USD=X) and extract the current exchange rate.\n"
         "2. Locate the Technical Analysis section or a chart to find the 14-day RSI value.\n"
@@ -80,9 +90,15 @@ async def fx_strategist_node(state: AuraState):
             "conviction_score": fx_info.conviction_score
         }
 
-        # Update cache on success
-        last_fx_data = data
-        last_fx_update = now
+        # 3. Save the newly fetched data to the physical file!
+        try:
+            with open(CACHE_FILE_PATH, "w") as f:
+                json.dump({
+                    "timestamp": now.isoformat(),
+                    "data": data
+                }, f)
+        except Exception as e:
+            print(f"⚠️ Failed to write to cache file: {e}")
 
         print(f"💰 Cost for this run: {result.total_cost_usd}")
 
@@ -93,7 +109,7 @@ async def fx_strategist_node(state: AuraState):
     print(f"📊 Market Insight: {data.get('trend')} | Rate: {data.get('rate')} | RSI: {data.get('rsi')}")
 
     return {
-        "current_fx_rate": data.get("rate", state["current_fx_rate"]),
+        "current_fx_rate": data.get("rate", state.get("current_fx_rate", 0.0)),
         "market_prediction": data.get("trend", "NEUTRAL"),
     }
 
