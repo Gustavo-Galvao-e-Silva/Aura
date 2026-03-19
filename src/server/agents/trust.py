@@ -3,6 +3,7 @@ import json
 import os
 from stellar_sdk import Server, Keypair, TransactionBuilder, Network, Asset
 from agents.state import AuraState
+from my_fastapi_app.app.config import STELLAR_BASE_FEE, STELLAR_TRANSACTION_TIMEOUT
 from my_fastapi_app.app.db.session import SessionLocal
 from db.models import AuditLog
 
@@ -52,7 +53,7 @@ def trust_engine_node(state: AuraState):
                     TransactionBuilder(
                         source_account=source_account,
                         network_passphrase=Network.TESTNET_NETWORK_PASSPHRASE,
-                        base_fee=100,
+                        base_fee=STELLAR_BASE_FEE,
                     )
                     .add_hash_memo(bytes.fromhex(audit_hash)) # Put our data hash INSIDE
                     .append_payment_op(
@@ -60,7 +61,7 @@ def trust_engine_node(state: AuraState):
                         amount="0.00001", 
                         asset=Asset.native() 
                     )
-                    .set_timeout(30).build()
+                    .set_timeout(STELLAR_TRANSACTION_TIMEOUT).build()
                 )
 
                 transaction.sign(source_keypair)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Float, Date, Boolean, DateTime, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Float, Date, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 

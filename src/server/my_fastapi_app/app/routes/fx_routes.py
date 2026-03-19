@@ -6,6 +6,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from db.models import CotationNotify
+from my_fastapi_app.app.config import (
+    CREBIT_API_URL,
+    WISE_API_URL,
+    REMITLY_API_URL,
+    HTTP_CLIENT_TIMEOUT,
+)
 from my_fastapi_app.app.db.session import get_db
 
 router = APIRouter(prefix="/fx", tags=["FX Routes"])
@@ -27,10 +33,6 @@ async def get_fx_provider_rates():
 
     Returns rate comparisons showing BRL received per $1000 USD sent.
     """
-    crebit_url = "https://api.crebitpay.com/api/create-quote-new"
-    wise_url = "https://api.wise.com/v3/quotes"
-    remitly_url = "https://api.remitly.io/v3/calculator/estimate"
-
     wise_api_key = os.getenv("WISE_API_KEY")
 
     parsed = {
@@ -39,11 +41,11 @@ async def get_fx_provider_rates():
         "remitly": None,
     }
 
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with httpx.AsyncClient(timeout=HTTP_CLIENT_TIMEOUT) as client:
         # CREBIT
         try:
             crebit_response = await client.post(
-                crebit_url,
+                CREBIT_API_URL,
                 json={
                     "symbol": "USDC/BRL",
                     "quote_type": "on_ramp",
@@ -77,7 +79,7 @@ async def get_fx_provider_rates():
                 wise_headers["Authorization"] = f"Bearer {wise_api_key}"
 
             wise_response = await client.post(
-                wise_url,
+                WISE_API_URL,
                 json={
                     "sourceCurrency": "USD",
                     "targetCurrency": "BRL",
@@ -108,7 +110,7 @@ async def get_fx_provider_rates():
         # REMITLY
         try:
             remitly_response = await client.get(
-                remitly_url,
+                REMITLY_API_URL,
                 params={
                     "conduit": "USA:USD-BRA:BRL",
                     "anchor": "SEND",

@@ -3,6 +3,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from db.models import AuditLog
+from my_fastapi_app.app.config import STELLAR_EXPLORER_BASE_URL
 from my_fastapi_app.app.db.session import get_db
 
 router = APIRouter(prefix="/blockchain", tags=["Blockchain Audit"])
@@ -42,6 +43,6 @@ async def verify_reasoning(identifier: str, db: Session = Depends(get_db)):
         "reasoning": log_entry.reasoning,
         "audit_hash": log_entry.decision_hash,
         "stellar_tx_id": log_entry.stellar_tx_id,
-        "ledger_url": f"https://stellar.expert/explorer/testnet/tx/{link_id}",
+        "ledger_url": f"{STELLAR_EXPLORER_BASE_URL}/{link_id}",
         "message": "This decision is cryptographically locked on the Stellar Public Ledger."
     }

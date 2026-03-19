@@ -11,10 +11,11 @@ from agents.prompts import get_visionary_accountant_prompt
 from browser_use_sdk.v3 import AsyncBrowserUse, BrowserUseError
 
 from datetime import datetime, timedelta
+
+from my_fastapi_app.app.config import CACHE_EXPIRY_MINUTES
+
 # --- CACHE CONFIGURATION ---
 # We store the last update time in memory to stay under the 20 RPD limit.
-# For a 20 RPD limit (with 2 calls per pass), 120 minutes is a safe interval.
-CACHE_EXPIRY_MINUTES = 120 
 CACHE_FILE_PATH = "fx_cache.json"
 last_fx_data = None
 last_fx_update = None
