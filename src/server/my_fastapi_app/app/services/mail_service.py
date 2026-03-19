@@ -11,8 +11,6 @@ def send_quote_alert_email(to_email: str, current_rate: float, target_rate: floa
     smtp_password = os.getenv("SMTP_PASSWORD")
     from_email = os.getenv("FROM_EMAIL", smtp_user)
 
-    print(from_email, smtp_password, smtp_user)
-
     if not smtp_host or not smtp_user or not smtp_password:
         raise ValueError("SMTP environment variables are not configured.")
 
