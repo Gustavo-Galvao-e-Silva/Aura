@@ -29,7 +29,11 @@ import os
 import httpx
 
 
-app = FastAPI(title="Aura: Global Finance Co-Pilot")
+app = FastAPI(
+    title="Revellio API",
+    description="AI-powered global finance co-pilot for international students. Manage expenses, optimize FX rates, and make intelligent payment decisions.",
+    version="1.0.0",
+)
 
 class CreateUserDTO(BaseModel):
     fullName: str
@@ -100,16 +104,33 @@ async def startup_event():
     Base.metadata.create_all(bind=engine) 
     asyncio.create_task(monitor_market_loop())
 
-@app.get("/status")
+@app.get("/status", tags=["Agent Status"])
 async def get_status():
+    """
+    Get the current state of the AI agent system.
+
+    Returns the current market prediction, pending liabilities, FX rates,
+    route options, and other agent state information.
+    """
     return current_state
 
-@app.post("/upload-invoice")
+@app.post("/upload-invoice", tags=["Expenses"])
 async def upload_invoice(
     username: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    """
+    Upload an invoice or bill image for OCR processing.
+
+    Uses Google Gemini Vision to extract expense details from the uploaded image,
+    including automatic liability prediction based on user's expense history.
+
+    - **username**: User identifier
+    - **file**: Image file (JPEG, PNG, etc.)
+
+    Returns the number of actual and predicted liabilities extracted.
+    """
     image_bytes = await file.read()
 
     past_liabilities = (
@@ -146,13 +167,22 @@ async def upload_invoice(
     }
 
 
-@app.get("/get-user-expenses")
+@app.get("/get-user-expenses", tags=["Expenses"])
 async def get_user_expenses(
     username: str = Query(...),
     filter_by: Literal["all", "upcoming", "paid", "overdue", "predicted"] = Query("all"),
     limit: int | None = Query(None),
     db: Session = Depends(get_db),
 ):
+    """
+    Retrieve user expenses with optional filtering.
+
+    - **username**: User identifier
+    - **filter_by**: Filter expenses by status (all, upcoming, paid, overdue, predicted)
+    - **limit**: Maximum number of expenses to return (optional)
+
+    Returns a list of expenses matching the filter criteria.
+    """
     query = db.query(Liability).filter(Liability.username == username)
 
     if filter_by == "all":
@@ -190,11 +220,20 @@ async def get_user_expenses(
 
     return {"user-expenses": past_liabilities}
 
-@app.post("/post-create-user")
+@app.post("/post-create-user", tags=["Users"])
 async def post_create_user(
     data: CreateUserDTO,
     db: Session = Depends(get_db),
 ):
+    """
+    Create a new user account.
+
+    - **fullName**: User's full name
+    - **username**: Unique username identifier
+    - **email**: User's email address
+
+    Returns the created user details.
+    """
     new_user = Users(
         fullname=data.fullName,
         username=data.username,
@@ -207,11 +246,18 @@ async def post_create_user(
 
     return new_user
 
-@app.get("/get-expense-stats")
+@app.get("/get-expense-stats", tags=["Expenses"])
 async def get_expense_stats(
     username: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
+    """
+    Get expense statistics and totals.
+
+    - **username**: User identifier (optional, defaults to all users)
+
+    Returns total to be paid, upcoming total, and overdue total.
+    """
     query = db.query(Liability).filter(Liability.is_predicted == False)
 
     if username:
@@ -243,11 +289,23 @@ async def get_expense_stats(
         "overdue_total": overdue_total,
     }
 
-@app.post("/create-expense")
+@app.post("/create-expense", tags=["Expenses"])
 async def post_create_expense(
     data: CreateExpenseDTO,
     db: Session = Depends(get_db),
 ):
+    """
+    Create a new expense manually.
+
+    - **username**: User identifier
+    - **name**: Expense name/description
+    - **amount**: Expense amount
+    - **currency**: Currency code (USD or BRL)
+    - **due_date**: Due date (YYYY-MM-DD format)
+    - **category**: Expense category (Education, Housing, Food, etc.)
+
+    Returns the created expense details.
+    """
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
@@ -276,8 +334,16 @@ async def post_create_expense(
     }
 
 
-@app.get("/get-fx-provider-rates")
+@app.get("/get-fx-provider-rates", tags=["FX Routes"])
 async def get_fx_provider_rates():
+    """
+    Compare real-time exchange rates from multiple FX providers.
+
+    Queries Crebit, Wise, and Remitly APIs to get current USD/BRL rates
+    and calculates the optimal route for currency conversion.
+
+    Returns rate comparisons showing BRL received per $1000 USD sent.
+    """
     crebit_url = "https://api.crebitpay.com/api/create-quote-new"
     wise_url = "https://api.wise.com/v3/quotes"
     remitly_url = "https://api.remitly.io/v3/calculator/estimate"
@@ -395,9 +461,17 @@ async def get_fx_provider_rates():
 
     return parsed
 
-@app.post("/set-quote-alert")
+@app.post("/set-quote-alert", tags=["FX Routes"])
 async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
+    """
+    Set up an email alert for target exchange rate.
 
+    - **username**: User identifier
+    - **email**: Email address for notifications
+    - **target_rate**: Target USD/BRL exchange rate
+
+    When the rate reaches or falls below the target, an email alert is sent.
+    """
     target_quote = CotationNotify(
         username=data.username,
         email=data.email,
@@ -408,12 +482,20 @@ async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(target_quote)
 
-@app.put("/update-expense/{expense_id}")
+@app.put("/update-expense/{expense_id}", tags=["Expenses"])
 async def update_expense(
     expense_id: int,
     data: UpdateExpenseDTO,
     db: Session = Depends(get_db),
 ):
+    """
+    Update an existing expense.
+
+    - **expense_id**: Unique expense identifier
+    - **data**: Updated expense details (name, amount, currency, due_date, category, is_paid)
+
+    Returns the updated expense details.
+    """
     expense = db.query(Liability).filter(Liability.id == expense_id).first()
 
     if not expense:
@@ -442,12 +524,18 @@ async def update_expense(
         "expense": expense,
     }
 
-@app.get("/dashboard-expenses")
-async def update_expense(
+@app.get("/dashboard-expenses", tags=["Expenses"])
+async def get_dashboard_expenses(
     username: str | None = Query(None),
     db: Session = Depends(get_db)
 ):
-    
+    """
+    Get dashboard summary for expenses.
+
+    - **username**: User identifier (optional)
+
+    Returns total expense count and next upcoming liability.
+    """
     count = db.query(Liability).filter(Liability.is_predicted == False, Liability.username == username).count()
     next_liability = db.query(Liability).filter(     
             Liability.is_predicted == False,
@@ -459,11 +547,16 @@ async def update_expense(
         "next_liability": next_liability
     }
 
-@app.get("/verify-reasoning/{identifier}")
+@app.get("/verify-reasoning/{identifier}", tags=["Blockchain Audit"])
 async def verify_reasoning(identifier: str, db: Session = Depends(get_db)):
     """
-    Flexible Verification: 
-    Lookup by either the Audit Hash (data) or Stellar TX ID (ledger).
+    Verify AI payment decisions on the Stellar blockchain.
+
+    Flexible Verification: Lookup by either the Audit Hash (data) or Stellar TX ID (ledger).
+
+    - **identifier**: Either the decision hash or Stellar transaction ID
+
+    Returns the verified reasoning, timestamp, and link to Stellar Explorer.
     """
     # Search for the identifier in BOTH the decision_hash and stellar_tx_id columns
     log_entry = db.query(AuditLog).filter(
