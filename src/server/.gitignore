@@ -2,3 +2,4 @@
 __pycache__
 .env
 fx_cache.json
+*.pyc
