@@ -13,4 +13,11 @@ Pillow
 requests
 browser-use-sdk
 playwright
+# Market data — API-first researcher nodes
+fredapi
+wbgapi
+yfinance
+python-bcb
+# Search & sentiment researcher node
+tavily-python
 stellar-sdk
