@@ -8,8 +8,8 @@ class MarketAnalysis(TypedDict):
     risk_flags: List[str] # e.g. ["election_volatility", "commodity_headwind", "geopolitical_risk"]
 
 def _merge_dicts(a: Dict, b: Dict) -> Dict:
-    "Reducer for parallel branch fan-in: merges two dicts, b overrides a."""
-    return {**a, *b}
+    """Reducer for parallel branch fan-in: merges two dicts, b overrides a."""
+    return {**a, **b}
 
 class AuraState(TypedDict):
     # Current financial snapshot
