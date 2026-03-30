@@ -9,13 +9,23 @@ from db.models import AuditLog
 
 def trust_engine_node(state: AuraState):
     """
-    Role 3: The Trust Engine.
+    Role 5: The Trust Engine.
     Captures the REAL Stellar TX ID and saves it to Postgres.
+
+    Now enhanced to hash the full market_analysis structure, providing
+    verifiable proof of the exact thesis, confidence, and risk factors
+    that led to each payment decision.
     """
     reasoning_text = state.get("selected_route") or "No action recommended."
-    
+    market_analysis = state.get("market_analysis", {})
+
+    # Include the full market analysis in the audit payload
     decision_payload = {
-        "market_prediction": state.get("market_prediction"),
+        "market_prediction": market_analysis.get("prediction", state.get("market_prediction")),
+        "market_confidence": market_analysis.get("confidence", 0.0),
+        "market_thesis": market_analysis.get("thesis", ""),
+        "risk_flags": market_analysis.get("risk_flags", []),
+        "market_metrics": market_analysis.get("metrics", {}),
         "current_fx_rate": state.get("current_fx_rate"),
         "reasoning": reasoning_text,
         "payment_decisions": state.get("payment_decisions")
