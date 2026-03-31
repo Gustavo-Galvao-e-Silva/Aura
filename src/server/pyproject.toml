@@ -64,6 +64,10 @@ dependencies = [
 
     # Blockchain
     "stellar-sdk",
+
+    # Semantic search & embeddings
+    "pgvector",
+    "sentence-transformers",
 ]
 
 [project.optional-dependencies]
