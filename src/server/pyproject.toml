@@ -35,8 +35,9 @@ dependencies = [
     "python-multipart",
 
     # Database
-    "SQLAlchemy",
-    "psycopg2-binary",
+    "SQLAlchemy[asyncio]",
+    "psycopg2-binary",  # Keep for Alembic
+    "asyncpg",  # Async PostgreSQL driver
     "alembic",
 
     # Configuration
