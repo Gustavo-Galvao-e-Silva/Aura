@@ -259,7 +259,7 @@ async def sentiment_researcher_node(state: AuraState) -> Dict[str, Any]:
         try:
             result = await bu_client.run(
                 f"Search for recent news about: {topic}. Summarize the top 3 findings in 1-2 sentences each.",
-                model="bu-fast"  # Use fast model for cost efficiency
+                model="bu-mini"  # Use mini model for cost efficiency
             )
             if result.output:
                 news_data.append({
