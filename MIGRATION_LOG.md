@@ -12,12 +12,12 @@
 
 - [x] Phase 1: Docker Compose Full Stack (2-3h) - ✅ COMPLETE
 - [x] Phase 2: Migrate to pyproject.toml (30min) - ✅ COMPLETE
-- [ ] Phase 3: Centralized Configuration (1h)
+- [x] Phase 3: Centralized Configuration (1h) - ✅ COMPLETE
 - [ ] Phase 4: Alembic Migrations (1-2h)
 - [ ] Phase 5: AsyncSession Refactor (3-4h)
 - [ ] Phase 6: Semantic Search in Trust Engine (2-3h)
 
-**Total Progress:** Phase 2 complete (2/6 phases - 33%)
+**Total Progress:** Phase 3 complete (3/6 phases - 50%)
 
 ---
 
@@ -50,13 +50,14 @@
 
 ---
 
-## Current Phase: Phase 3 - Centralized Configuration
+## Current Phase: Phase 4 - Alembic Migrations
 
 **Status:** ⏸️ PENDING
 
 **Previous Phases:**
 - Phase 1 - Docker Compose Full Stack ✅ COMPLETE
 - Phase 2 - Migrate to pyproject.toml ✅ COMPLETE
+- Phase 3 - Centralized Configuration ✅ COMPLETE
 
 ---
 
@@ -196,6 +197,68 @@
 
 ---
 
+## Phase 3 Progress Log
+
+### 2026-03-31 - Phase 3 Implementation
+
+**Status:** ✅ COMPLETE
+
+**Entry:** Migrated to centralized configuration using `pydantic-settings`
+
+**Files Created:**
+1. `/src/server/my_fastapi_app/app/settings.py` - Centralized Settings class with all config
+
+**Files Modified:**
+1. `/src/server/pyproject.toml` - Added `pydantic-settings` dependency
+2. `/src/server/my_fastapi_app/app/db/session.py` - Uses `settings.database_url`
+3. `/src/server/my_fastapi_app/app/main.py` - Uses `settings` for CORS and intervals
+4. `/src/server/agents/agents.py` - Uses `settings` for API keys
+5. `/src/server/agents/researchers.py` - Uses `settings` for API keys
+6. `/src/server/agents/trust.py` - Uses `settings` for Stellar config
+7. `/src/server/agents/router.py` - Uses `settings` for FX provider config
+8. `/src/server/tools/market_tools.py` - Uses `settings` for API keys
+9. `/src/server/my_fastapi_app/app/services/mail_service.py` - Uses `settings` for SMTP config
+10. `/src/server/my_fastapi_app/app/routes/fx_routes.py` - Uses `settings` for FX provider config
+
+**Key Features Implemented:**
+- ✅ Single source of truth for all configuration
+- ✅ Type-safe settings with Pydantic validation
+- ✅ Automatic .env file loading
+- ✅ Smart defaults for optional settings
+- ✅ Computed properties (`database_url`, `from_email`)
+- ✅ All environment variables centralized and documented
+- ✅ Eliminated scattered `os.getenv()` calls throughout codebase
+
+**Environment Variables Centralized:**
+- **API Keys**: GOOGLE_API_KEY, BROWSER_USE_API_KEY, FRED_API_KEY, TAVILY_API_KEY, STELLAR_SECRET_KEY, WISE_API_KEY
+- **Database**: DATABASE_URL, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME
+- **SMTP**: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, FROM_EMAIL
+- **Config Constants**: Cache expiry, FX provider URLs, HTTP timeouts, Stellar settings, fee configuration, default balances, CORS origins
+
+**Testing Results:**
+- ✅ Docker build successful
+- ✅ All settings loaded correctly from .env
+- ✅ Backend starts without import errors or missing config
+- ✅ All API keys validated and working (FRED, Tavily, Google, Browser Use, Stellar)
+- ✅ All 5 agents execute successfully
+- ✅ Gemini synthesis working (75% confidence predictions)
+- ✅ Browser Use cache persisting (41m old)
+- ✅ Stellar transactions submitting correctly
+- ✅ Database connection working
+
+**Duration:** ~1 hour (on target with estimate)
+
+**Benefits:**
+- Type safety catches configuration errors at startup
+- Single location to view all required environment variables
+- Easier onboarding (new developers can see all config in one file)
+- Better testing (can override settings for test environments)
+- Pydantic validation ensures correct types and formats
+
+**Next:** Phase 3 COMPLETE ✅ → Ready for Phase 4 (Alembic Migrations)
+
+---
+
 ## Phase Completion Summary
 
 ### Phase 1: Docker Compose Full Stack
@@ -219,10 +282,14 @@
 **Files Modified:** 2 (Dockerfile, justfile)
 
 ### Phase 3: Centralized Configuration
-**Status:** ⏸️ PENDING
-**Started:** -
-**Completed:** -
-**Duration:** -
+**Status:** ✅ COMPLETE
+**Started:** 2026-03-31
+**Completed:** 2026-03-31
+**Duration:** ~1 hour
+**Issues:** 0 (no issues encountered)
+**Tests Passed:** 8/8 (build, settings load, API keys, agents, synthesis, caching, blockchain, database)
+**Files Created:** 1 (settings.py)
+**Files Modified:** 10 (pyproject.toml + 9 files migrated to settings)
 
 ### Phase 4: Alembic Migrations
 **Status:** ⏸️ PENDING
@@ -282,6 +349,9 @@
 | 2026-03-31 | Phase 2 | Use setuptools.packages.find instead of manual list | Automatic package discovery more robust than manual specification |
 | 2026-03-31 | Phase 2 | Keep requirements.txt for backwards compatibility | Provides fallback if pyproject.toml has issues, though no longer used |
 | 2026-03-31 | Phase 2 | Add dev dependencies as optional | Separates production deps from development tools (pytest, black, ruff) |
+| 2026-03-31 | Phase 3 | Use pydantic-settings for centralized config | Type-safe settings with validation, single source of truth, eliminates scattered os.getenv() calls |
+| 2026-03-31 | Phase 3 | Computed properties for derived values | database_url and from_email computed from components, cleaner than string concatenation |
+| 2026-03-31 | Phase 3 | Keep config.py for backwards compatibility | Old config.py remains in case needed, though no longer imported anywhere |
 
 ---
 
@@ -342,11 +412,11 @@ just dev
 | Planning | 1h | 1h | ✅ On target |
 | Phase 1 | 2-3h | ~4h | ⚠️ +1h (debugging) |
 | Phase 2 | 30min | ~30min | ✅ On target |
-| Phase 3 | 1h | - | - |
+| Phase 3 | 1h | ~1h | ✅ On target |
 | Phase 4 | 1-2h | - | - |
 | Phase 5 | 3-4h | - | - |
 | Phase 6 | 2-3h | - | - |
-| **Total** | **8-10h** | **~5.5h** | **-** |
+| **Total** | **8-10h** | **~6.5h** | **-** |
 
 ---
 
@@ -354,6 +424,6 @@ just dev
 
 *This log will be updated continuously as we progress through each phase.*
 
-**Last Updated:** 2026-03-31 (Phase 2 complete)
+**Last Updated:** 2026-03-31 (Phase 3 complete)
 
-**Current Status:** Phase 2 ✅ COMPLETE | Ready for Phase 3 (Centralized Configuration) | 33% of migration complete
+**Current Status:** Phase 3 ✅ COMPLETE | Ready for Phase 4 (Alembic Migrations) | 50% of migration complete (halfway there!)
