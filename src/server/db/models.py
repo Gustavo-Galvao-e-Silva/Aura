@@ -1,6 +1,7 @@
 from sqlalchemy import Column, ForeignKey, Integer, String, Float, Date, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
+from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
 
@@ -30,6 +31,10 @@ class AuditLog(Base):
     reasoning = Column(String)                  # The "Proof of Reason" text
 
     stellar_tx_id = Column(String, nullable=True)
+
+    # Semantic search: vector embedding of the reasoning + market context
+    # Dimension 384 is the output size of 'all-MiniLM-L6-v2' sentence-transformer model
+    reasoning_embedding = Column(Vector(384), nullable=True)
 
 class Users(Base):
     __tablename__ = "users"
