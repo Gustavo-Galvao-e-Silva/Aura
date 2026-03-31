@@ -1,12 +1,13 @@
 import hashlib
 import json
 from stellar_sdk import Server, Keypair, TransactionBuilder, Network, Asset
+from sqlalchemy import select
 from agents.state import AuraState
 from my_fastapi_app.app.settings import settings
-from my_fastapi_app.app.db.session import SessionLocal
+from my_fastapi_app.app.db.session import AsyncSessionLocal
 from db.models import AuditLog
 
-def trust_engine_node(state: AuraState):
+async def trust_engine_node(state: AuraState):
     """
     Role 5: The Trust Engine.
     Captures the REAL Stellar TX ID and saves it to Postgres.
@@ -39,11 +40,13 @@ def trust_engine_node(state: AuraState):
         d = decision.copy()
         d["audit_hash"] = audit_hash
         updated_decisions.append(d)
-    
-    db = SessionLocal()
-    try:
+
+    async with AsyncSessionLocal() as db:
         # 2. Check if this logic state has already been hashed
-        existing_log = db.query(AuditLog).filter(AuditLog.decision_hash == audit_hash).first()
+        result = await db.execute(
+            select(AuditLog).filter(AuditLog.decision_hash == audit_hash)
+        )
+        existing_log = result.scalar_one_or_none()
         if existing_log:
             print(f"♻️ Trust Engine: Audit exists. TX: {existing_log.stellar_tx_id[:10]}...")
             return {"audit_hash": audit_hash, "payment_decisions": updated_decisions}
@@ -81,19 +84,17 @@ def trust_engine_node(state: AuraState):
                 print(f"⚠️ Stellar Submission Failed: {e}")
 
         # 4. Save to Postgres WITH the Stellar link
-        new_log = AuditLog(
-            decision_hash=audit_hash,
-            reasoning=reasoning_text,
-            stellar_tx_id=stellar_tx_id # Save the link!
-        )
-        db.add(new_log)
-        db.commit()
-        print(f"🔐 Local Audit Log saved with TX reference.")
-        
-    except Exception as e:
-        print(f"⚠️ Database Error: {e}")
-        db.rollback()
-    finally:
-        db.close()
+        try:
+            new_log = AuditLog(
+                decision_hash=audit_hash,
+                reasoning=reasoning_text,
+                stellar_tx_id=stellar_tx_id # Save the link!
+            )
+            db.add(new_log)
+            await db.commit()
+            print(f"🔐 Local Audit Log saved with TX reference.")
+        except Exception as e:
+            print(f"⚠️ Database Error: {e}")
+            await db.rollback()
 
-    return {"audit_hash": audit_hash, "payment_decisions": updated_decisions}
+        return {"audit_hash": audit_hash, "payment_decisions": updated_decisions}
