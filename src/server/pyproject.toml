@@ -27,6 +27,7 @@ dependencies = [
     "langchain-google-genai",
     "google-generativeai",
     "pydantic",
+    "pydantic-settings",
 
     # Web framework
     "fastapi",
