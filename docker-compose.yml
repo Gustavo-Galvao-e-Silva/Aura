@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-revellio}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  backend:
+    build:
+      context: ./src/server
+      dockerfile: Dockerfile
+    command: uvicorn my_fastapi_app.app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./src/server/.env
+    environment:
+      # Override DATABASE_URL to use Docker service name
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/revellio
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: revellio
+    volumes:
+      # Mount source code for hot reload
+      - ./src/server:/app
+      # Exclude cache and virtual envs from sync
+      - /app/__pycache__
+      - /app/.venv
+      - /app/.pytest_cache
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./src/client
+      dockerfile: Dockerfile
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      # Mount source for hot reload
+      - ./src/client:/app
+      # Exclude node_modules (use container's version)
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
