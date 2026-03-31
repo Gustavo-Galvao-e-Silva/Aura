@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Users
 from my_fastapi_app.app.db.session import get_db
@@ -17,7 +17,7 @@ class CreateUserDTO(BaseModel):
 @router.post("/create")
 async def post_create_user(
     data: CreateUserDTO,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new user account.
@@ -35,7 +35,7 @@ async def post_create_user(
     )
 
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
 
     return new_user
