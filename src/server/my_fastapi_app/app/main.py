@@ -36,7 +36,9 @@ async def lifespan(app: FastAPI):
     print("🚀 Revellio Backend: Startup event triggered")
 
     print("🚀 Revellio Backend: Initializing database...")
-    Base.metadata.create_all(bind=engine)
+    # Create tables using async engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     print("🚀 Revellio Backend: Starting market monitor background task...")
     task = asyncio.create_task(monitor_market_loop())
