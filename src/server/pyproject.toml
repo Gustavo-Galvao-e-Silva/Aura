@@ -37,6 +37,7 @@ dependencies = [
     # Database
     "SQLAlchemy",
     "psycopg2-binary",
+    "alembic",
 
     # Configuration
     "python-dotenv",
