@@ -1,15 +1,15 @@
-import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from my_fastapi_app.app.settings import settings
 
 
 def send_quote_alert_email(to_email: str, current_rate: float, target_rate: float, provider: str):
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    from_email = os.getenv("FROM_EMAIL", smtp_user)
+    smtp_host = settings.SMTP_HOST
+    smtp_port = settings.SMTP_PORT
+    smtp_user = settings.SMTP_USER
+    smtp_password = settings.SMTP_PASSWORD
+    from_email = settings.from_email
 
     if not smtp_host or not smtp_user or not smtp_password:
         raise ValueError("SMTP environment variables are not configured.")
