@@ -480,12 +480,22 @@ Be analytical, not speculative. Weight hard data (rates, yields) more heavily th
 
     try:
         # Define the expected response structure
+        class MarketMetrics(BaseModel):
+            """Concrete metrics model (Gemini doesn't support Dict[str, Any])."""
+            selic_rate: float | None = None
+            fed_funds_rate: float | None = None
+            rate_differential: float | None = None
+            commodity_sentiment: str | None = None
+            fiscal_health_score: int | None = None
+            geopolitical_risk_score: int | None = None
+            political_stability_score: int | None = None
+
         class MarketAnalysisResponse(BaseModel):
             prediction: str  # BULLISH | BEARISH | NEUTRAL
             confidence: float  # 0.0 to 1.0
             thesis: str  # 2-3 sentences
             risk_flags: list[str]  # List of risk identifiers
-            metrics: dict  # Key-value pairs of important numbers
+            metrics: MarketMetrics  # Structured metrics (not Dict to avoid additionalProperties)
 
         response = gemini_client.models.generate_content(
             model="gemini-3.1-flash-lite-preview",
