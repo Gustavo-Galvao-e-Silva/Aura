@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import AuditLog
 from my_fastapi_app.app.config import STELLAR_EXPLORER_BASE_URL
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/blockchain", tags=["Blockchain Audit"])
 
 
 @router.get("/verify/{identifier}")
-async def verify_reasoning(identifier: str, db: Session = Depends(get_db)):
+async def verify_reasoning(identifier: str, db: AsyncSession = Depends(get_db)):
     """
     Verify AI payment decisions on the Stellar blockchain.
 
@@ -21,12 +21,15 @@ async def verify_reasoning(identifier: str, db: Session = Depends(get_db)):
     Returns the verified reasoning, timestamp, and link to Stellar Explorer.
     """
     # Search for the identifier in BOTH the decision_hash and stellar_tx_id columns
-    log_entry = db.query(AuditLog).filter(
-        or_(
-            AuditLog.decision_hash == identifier,
-            AuditLog.stellar_tx_id == identifier
+    result = await db.execute(
+        select(AuditLog).filter(
+            or_(
+                AuditLog.decision_hash == identifier,
+                AuditLog.stellar_tx_id == identifier
+            )
         )
-    ).first()
+    )
+    log_entry = result.scalar_one_or_none()
 
     if not log_entry:
         raise HTTPException(
