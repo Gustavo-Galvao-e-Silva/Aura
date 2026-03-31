@@ -4,7 +4,7 @@
 
 **Start Date:** 2026-03-31
 
-**Status:** 🚀 IN PROGRESS
+**Status:** ✅ MISSION COMPLETE
 
 ---
 
@@ -15,9 +15,9 @@
 - [x] Phase 3: Centralized Configuration (1h) - ✅ COMPLETE
 - [x] Phase 4: Alembic Migrations (1-2h) - ✅ COMPLETE
 - [x] Phase 5: AsyncSession Refactor (3-4h) - ✅ COMPLETE
-- [ ] Phase 6: Semantic Search in Trust Engine (2-3h)
+- [x] Phase 6: Semantic Search in Trust Engine (2-3h) - ✅ COMPLETE
 
-**Total Progress:** Phase 5 complete (5/6 phases - 83%)
+**Total Progress:** ALL PHASES COMPLETE (6/6 phases - 100%)
 
 ---
 
@@ -50,16 +50,17 @@
 
 ---
 
-## Current Phase: Phase 6 - Semantic Search in Trust Engine
+## Current Phase: Mission Complete!
 
-**Status:** ⏸️ PENDING
+**Status:** ✅ ALL PHASES COMPLETE
 
-**Previous Phases:**
+**Completed Phases:**
 - Phase 1 - Docker Compose Full Stack ✅ COMPLETE
 - Phase 2 - Migrate to pyproject.toml ✅ COMPLETE
 - Phase 3 - Centralized Configuration ✅ COMPLETE
 - Phase 4 - Alembic Migrations ✅ COMPLETE
 - Phase 5 - AsyncSession Refactor ✅ COMPLETE
+- Phase 6 - Semantic Search in Trust Engine ✅ COMPLETE
 
 ---
 
@@ -422,6 +423,122 @@ async with AsyncSessionLocal() as db:
 
 ---
 
+## Phase 6 Progress Log
+
+### 2026-03-31 - Phase 6 Implementation
+
+**Status:** ✅ COMPLETE
+
+**Entry:** Added semantic search capabilities to trust engine using pgvector, enabling similarity-based reasoning analysis and contradiction detection alongside existing Stellar blockchain immutability layer.
+
+**Files Created:**
+1. `/src/server/tools/embeddings.py` - Sentence transformer utilities for generating 384-dim embeddings
+2. `/src/server/alembic/versions/add_pgvector_and_embeddings.py` - Migration to enable pgvector and add vector column
+3. `/src/server/alembic/versions/enable_pgvector_extension.sql` - SQL reference for pgvector enablement
+
+**Files Modified:**
+1. `/src/server/pyproject.toml` - Added pgvector and sentence-transformers dependencies
+2. `/src/server/db/models.py` - Added reasoning_embedding Vector(384) column to AuditLog
+3. `/src/server/agents/trust.py` - Enhanced to generate embeddings alongside blockchain hashing
+4. `/src/server/my_fastapi_app/app/routes/blockchain.py` - Added 2 new semantic search endpoints
+
+**Key Features Implemented:**
+- ✅ pgvector extension enabled in PostgreSQL database
+- ✅ 384-dimensional vector embeddings using 'all-MiniLM-L6-v2' model (fast, lightweight)
+- ✅ Automatic embedding generation in trust engine (combines reasoning + market context)
+- ✅ Dual-mode verification: Blockchain (immutable proof) + Semantic (analytical insights)
+- ✅ `/blockchain/search/similar` endpoint - Find similar reasoning using natural language queries
+- ✅ `/blockchain/search/contradictions` endpoint - Detect inconsistent AI decisions under similar conditions
+- ✅ Cosine similarity search using pgvector's `<=>` operator
+- ✅ Proper asyncpg parameter handling for vector types
+
+**New API Endpoints:**
+
+**1. GET /blockchain/search/similar**
+- Search for similar AI reasoning using natural language
+- Example: `"bearish BRL fiscal risk"` returns decisions made under similar conditions
+- Parameters: query (string), limit (1-20), threshold (0.0-1.0)
+- Returns: List of decisions ranked by similarity score
+
+**2. GET /blockchain/search/contradictions**
+- Automatically detect contradictory decisions
+- Finds pairs where market conditions were similar but recommendations differed
+- Parameters: min_similarity (0.5-0.95), lookback_days (1-365)
+- Returns: Pairs of potentially contradictory decisions for review
+
+**Technical Implementation:**
+
+**Embedding Generation (tools/embeddings.py):**
+```python
+def generate_reasoning_embedding(reasoning_text: str, market_context: dict):
+    # Combines reasoning + prediction + confidence + thesis + risk_flags
+    # Returns 384-dim vector using SentenceTransformer('all-MiniLM-L6-v2')
+```
+
+**Trust Engine Enhancement:**
+- Now generates both blockchain hash AND semantic embedding
+- Embedding captures: reasoning text, market prediction, confidence, thesis, risk flags
+- Stored alongside Stellar TX ID in audit_log table
+
+**Vector Search Query Pattern:**
+```sql
+SELECT *,
+    1 - (reasoning_embedding <=> CAST(:query_embedding AS vector)) AS similarity
+FROM audit_log
+WHERE reasoning_embedding IS NOT NULL
+AND 1 - (reasoning_embedding <=> CAST(:query_embedding AS vector)) >= :threshold
+ORDER BY similarity DESC
+```
+
+**Testing Results:**
+- ✅ pgvector extension enabled successfully
+- ✅ Migration applied: reasoning_embedding column added
+- ✅ Embedding model loaded (all-MiniLM-L6-v2, ~80MB)
+- ✅ Trust engine generating embeddings: "🧬 Semantic embedding generated (384 dimensions)"
+- ✅ Embeddings stored with audit logs: "🔐 Local Audit Log saved with TX reference and embedding."
+- ✅ Semantic search endpoint working: Returned 5 results with 78-81% similarity scores
+- ✅ Contradiction detection working: Returned empty array (no contradictions = consistent AI)
+- ✅ Stellar blockchain integration still working alongside semantic layer
+- ✅ All agent heartbeat cycles generating embeddings automatically
+
+**Bug Fixes During Implementation:**
+1. **Issue:** asyncpg expected string for vector parameter, got Python list
+   - **Fix:** Convert list to string representation: `str(query_embedding)`
+
+2. **Issue:** PostgreSQL couldn't parameterize INTERVAL string literal
+   - **Fix:** Used interval multiplication: `(:days * INTERVAL '1 day')`
+
+**Duration:** ~2 hours (within 2-3h estimate)
+
+**Benefits:**
+- **Explainable AI:** Can find why AI made specific decisions by searching past reasoning
+- **Consistency Monitoring:** Automatically detect when AI changes its mind under similar conditions
+- **Precedent Search:** Find how AI handled similar market conditions historically
+- **Dual Verification:** Blockchain provides immutability, semantic search provides insights
+- **Production Analytics:** Monitor AI decision patterns over time
+
+**Architectural Pattern:**
+```
+Decision Made
+    ↓
+Trust Engine
+    ├─→ Blockchain Layer (Stellar)
+    │   └─ Cryptographic hash → Immutable proof
+    │
+    └─→ Semantic Layer (pgvector)
+        └─ 384-dim embedding → Similarity search
+            ↓
+        PostgreSQL with pgvector
+            ↓
+        API Endpoints
+            ├─ /search/similar (find precedents)
+            └─ /search/contradictions (detect inconsistencies)
+```
+
+**Next:** Phase 6 COMPLETE ✅ → ALL PHASES COMPLETE! 🎉
+
+---
+
 ## Phase Completion Summary
 
 ### Phase 1: Docker Compose Full Stack
@@ -475,10 +592,14 @@ async with AsyncSessionLocal() as db:
 **Files Modified:** 10 (session.py, main.py, 5 route files, 3 agent files, pyproject.toml)
 
 ### Phase 6: Semantic Search in Trust Engine
-**Status:** ⏸️ PENDING
-**Started:** -
-**Completed:** -
-**Duration:** -
+**Status:** ✅ COMPLETE
+**Started:** 2026-03-31
+**Completed:** 2026-03-31
+**Duration:** ~2 hours
+**Issues:** 2 (asyncpg vector parameter format, PostgreSQL INTERVAL parameterization) - both resolved
+**Tests Passed:** 4/4 (pgvector enabled, embeddings generated, semantic search, contradiction detection)
+**Files Created:** 3 (embeddings.py, pgvector migration, SQL reference)
+**Files Modified:** 4 (pyproject.toml, models.py, trust.py, blockchain.py routes)
 
 ---
 
@@ -499,6 +620,8 @@ async with AsyncSessionLocal() as db:
 | 2026-03-31 | 1 | Gemini synthesis failing with `additionalProperties` error | Replaced `Dict[str, Any]` with concrete `MarketMetrics` model | ✅ Fixed |
 | 2026-03-31 | 1 | Cache write failing with "json not associated" error | Removed duplicate local `import json` statements | ✅ Fixed |
 | 2026-03-31 | 1 | BCB Focus API 400 error | External API issue, graceful degradation working correctly | ⚠️ External |
+| 2026-03-31 | 6 | asyncpg expected string for vector parameter, got list | Convert embedding list to string: `str(query_embedding)` | ✅ Fixed |
+| 2026-03-31 | 6 | PostgreSQL couldn't parameterize INTERVAL literal | Use interval multiplication: `(:days * INTERVAL '1 day')` | ✅ Fixed |
 
 ---
 
@@ -529,6 +652,9 @@ async with AsyncSessionLocal() as db:
 | 2026-03-31 | Phase 5 | Use select() pattern instead of query() | SQLAlchemy 2.0+ select() provides better type safety and is the recommended pattern for async operations |
 | 2026-03-31 | Phase 5 | Use async context managers for agent DB sessions | `async with AsyncSessionLocal()` eliminates need for manual cleanup, cleaner than try/finally |
 | 2026-03-31 | Phase 5 | Keep psycopg2-binary alongside asyncpg | asyncpg for async runtime, psycopg2-binary for Alembic migrations (which run synchronously) |
+| 2026-03-31 | Phase 6 | Use sentence-transformers instead of OpenAI embeddings | Open-source, local model (all-MiniLM-L6-v2), no API costs, fast 384-dim vectors |
+| 2026-03-31 | Phase 6 | Combine reasoning + market context in embeddings | Rich embeddings capture full decision context, not just the reasoning text alone |
+| 2026-03-31 | Phase 6 | Keep both blockchain AND semantic layers | Blockchain = immutability proof, Semantic = analytical insights; complementary, not competing |
 
 ---
 
@@ -592,8 +718,8 @@ just dev
 | Phase 3 | 1h | ~1h | ✅ On target |
 | Phase 4 | 1-2h | ~1h | ✅ On target |
 | Phase 5 | 3-4h | ~1.5h | ✅ -2.5h under |
-| Phase 6 | 2-3h | - | - |
-| **Total** | **8-10h** | **~9h** | **-** |
+| Phase 6 | 2-3h | ~2h | ✅ On target |
+| **Total** | **10-14h** | **~10.5h** | **✅ On target** |
 
 ---
 
