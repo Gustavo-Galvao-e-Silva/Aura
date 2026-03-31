@@ -3,7 +3,8 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.agents import visionary_accountant_node
 from db.models import Liability, Users
@@ -35,7 +36,7 @@ class UpdateExpenseDTO(BaseModel):
 async def upload_invoice(
     username: str = Form(...),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Upload an invoice or bill image for OCR processing.
@@ -50,12 +51,12 @@ async def upload_invoice(
     """
     image_bytes = await file.read()
 
-    past_liabilities = (
-        db.query(Liability)
+    result = await db.execute(
+        select(Liability)
         .filter(Liability.username == username)
         .limit(10)
-        .all()
     )
+    past_liabilities = result.scalars().all()
 
     history_str = "\n".join(
         [f"{l.name}: ${l.amount} due {l.due_date}" for l in past_liabilities]
@@ -75,7 +76,7 @@ async def upload_invoice(
     for item in extraction_result.get("predicted_liabilities", []):
         db.add(Liability(**item, username=username, is_predicted=True))
 
-    db.commit()
+    await db.commit()
 
     return {
         "status": "success",
@@ -89,7 +90,7 @@ async def get_user_expenses(
     username: str,
     filter_by: Literal["all", "upcoming", "paid", "overdue", "predicted"] = Query("all"),
     limit: int | None = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Retrieve user expenses with optional filtering.
@@ -100,7 +101,7 @@ async def get_user_expenses(
 
     Returns a list of expenses matching the filter criteria.
     """
-    query = db.query(Liability).filter(Liability.username == username)
+    query = select(Liability).filter(Liability.username == username)
 
     if filter_by == "all":
         query = query.filter(Liability.is_predicted == False)
@@ -133,7 +134,8 @@ async def get_user_expenses(
     if limit is not None:
         query = query.limit(limit)
 
-    past_liabilities = query.all()
+    result = await db.execute(query)
+    past_liabilities = result.scalars().all()
 
     return {"user-expenses": past_liabilities}
 
@@ -141,7 +143,7 @@ async def get_user_expenses(
 @router.get("/stats")
 async def get_expense_stats(
     username: str | None = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get expense statistics and totals.
@@ -150,12 +152,13 @@ async def get_expense_stats(
 
     Returns total to be paid, upcoming total, and overdue total.
     """
-    query = db.query(Liability).filter(Liability.is_predicted == False)
+    query = select(Liability).filter(Liability.is_predicted == False)
 
     if username:
         query = query.filter(Liability.username == username)
 
-    all_expenses = query.all()
+    result = await db.execute(query)
+    all_expenses = result.scalars().all()
     today = date.today()
     week_from_now = today + timedelta(days=7)
 
@@ -185,7 +188,7 @@ async def get_expense_stats(
 @router.post("/create")
 async def post_create_expense(
     data: CreateExpenseDTO,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new expense manually.
@@ -202,7 +205,8 @@ async def post_create_expense(
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-    user = db.query(Users).filter(Users.username == data.username).first()
+    result = await db.execute(select(Users).filter(Users.username == data.username))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -218,8 +222,8 @@ async def post_create_expense(
     )
 
     db.add(new_liability)
-    db.commit()
-    db.refresh(new_liability)
+    await db.commit()
+    await db.refresh(new_liability)
 
     return {
         "status": "success",
@@ -231,7 +235,7 @@ async def post_create_expense(
 async def update_expense(
     expense_id: int,
     data: UpdateExpenseDTO,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Update an existing expense.
@@ -241,12 +245,14 @@ async def update_expense(
 
     Returns the updated expense details.
     """
-    expense = db.query(Liability).filter(Liability.id == expense_id).first()
+    result = await db.execute(select(Liability).filter(Liability.id == expense_id))
+    expense = result.scalar_one_or_none()
 
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
 
-    user = db.query(Users).filter(Users.username == data.username).first()
+    result = await db.execute(select(Users).filter(Users.username == data.username))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -261,8 +267,8 @@ async def update_expense(
     expense.category = data.category
     expense.is_paid = data.is_paid
 
-    db.commit()
-    db.refresh(expense)
+    await db.commit()
+    await db.refresh(expense)
 
     return {
         "status": "success",
@@ -273,7 +279,7 @@ async def update_expense(
 @router.get("/dashboard")
 async def get_dashboard_expenses(
     username: str | None = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get dashboard summary for expenses.
@@ -282,11 +288,24 @@ async def get_dashboard_expenses(
 
     Returns total expense count and next upcoming liability.
     """
-    count = db.query(Liability).filter(Liability.is_predicted == False, Liability.username == username).count()
-    next_liability = db.query(Liability).filter(
+    from sqlalchemy import func
+
+    count_result = await db.execute(
+        select(func.count()).select_from(Liability).filter(
+            Liability.is_predicted == False,
+            Liability.username == username
+        )
+    )
+    count = count_result.scalar()
+
+    next_result = await db.execute(
+        select(Liability).filter(
             Liability.is_predicted == False,
             Liability.username == username,
-            Liability.is_paid == False).order_by(Liability.due_date).first()
+            Liability.is_paid == False
+        ).order_by(Liability.due_date)
+    )
+    next_liability = next_result.scalar_one_or_none()
 
     return {
         "count": count,
