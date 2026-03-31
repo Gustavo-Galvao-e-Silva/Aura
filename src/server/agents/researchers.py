@@ -11,6 +11,7 @@ The synthesis_node will then combine all findings into a structured MarketAnalys
 """
 
 import os
+import json
 from datetime import datetime
 from typing import Dict, Any
 from agents.state import AuraState
@@ -26,7 +27,12 @@ from tools.market_tools import (
 )
 from browser_use_sdk.v3 import AsyncBrowserUse
 from google import genai
+from google.genai import types
 from pydantic import BaseModel
+
+# Cache configuration for Browser Use (file-based to persist across restarts)
+SENTIMENT_CACHE_FILE = "sentiment_browser_cache.json"
+SENTIMENT_CACHE_TTL_MINUTES = 90  # Match Tavily news cache TTL
 
 
 # ============================================================================
@@ -248,28 +254,65 @@ async def sentiment_researcher_node(state: AuraState) -> Dict[str, Any]:
     except Exception as e:
         print(f"   ✗ Tavily search error: {e}")
 
-    # 2. Use Browser Use to research specific topics
+    # 2. Use Browser Use to research specific topics (with file-based caching)
     research_topics = [
         "Brazil fiscal policy debt-to-GDP ratio 2026",
         "Brazil 2026 election polls spending ceiling",
         "Global geopolitical risks affecting emerging markets 2026"
     ]
 
-    for topic in research_topics:
+    browser_research_data = []
+    now = datetime.now()
+
+    # Check if cache exists and is fresh
+    cache_hit = False
+    if os.path.exists(SENTIMENT_CACHE_FILE):
         try:
-            result = await bu_client.run(
-                f"Search for recent news about: {topic}. Summarize the top 3 findings in 1-2 sentences each.",
-                model="bu-mini"  # Use mini model for cost efficiency
-            )
-            if result.output:
-                news_data.append({
-                    "source": f"Browser Research: {topic}",
-                    "summary": result.output
-                })
-                findings["sources"].append("Browser Use")
-                print(f"   ✓ Browser: Researched '{topic[:50]}...'")
+            with open(SENTIMENT_CACHE_FILE, "r") as f:
+                cached_content = json.load(f)
+
+            last_update = datetime.fromisoformat(cached_content["timestamp"])
+            age_minutes = (now - last_update).total_seconds() / 60
+
+            if age_minutes < SENTIMENT_CACHE_TTL_MINUTES:
+                browser_research_data = cached_content["data"]
+                cache_hit = True
+                print(f"   ♻️ Browser Use: Using FILE cached research ({int(age_minutes)}m old)")
         except Exception as e:
-            print(f"   ✗ Browser research error for '{topic[:30]}...': {e}")
+            print(f"   ⚠️ Cache read error: {e}. Falling back to live fetch.")
+
+    # If cache miss or stale, fetch live data
+    if not cache_hit:
+        print("   🌐 Browser Use: Fetching live research (expensive API calls)...")
+        for topic in research_topics:
+            try:
+                result = await bu_client.run(
+                    f"Search for recent news about: {topic}. Summarize the top 3 findings in 1-2 sentences each.",
+                    model="bu-mini"  # Use mini model for cost efficiency
+                )
+                if result.output:
+                    browser_research_data.append({
+                        "source": f"Browser Research: {topic}",
+                        "summary": result.output
+                    })
+                    print(f"   ✓ Browser: Researched '{topic[:50]}...'")
+            except Exception as e:
+                print(f"   ✗ Browser research error for '{topic[:30]}...': {e}")
+
+        # Save to cache file (persist across restarts)
+        try:
+            with open(SENTIMENT_CACHE_FILE, "w") as f:
+                json.dump({
+                    "timestamp": now.isoformat(),
+                    "data": browser_research_data
+                }, f)
+        except Exception as e:
+            print(f"   ⚠️ Failed to write cache file: {e}")
+
+    # Add browser research to news_data
+    news_data.extend(browser_research_data)
+    if browser_research_data:
+        findings["sources"].extend(["Browser Use"] * len(browser_research_data))
 
     # 3. Synthesize findings using Gemini
     if news_data:
@@ -300,7 +343,6 @@ Provide a 2-3 sentence summary focusing on implications for BRL/USD exchange rat
             )
 
             if response and response.text:
-                import json
                 analysis = json.loads(response.text)
                 findings.update({
                     "fiscal_health_score": analysis.get("fiscal_health_score", 5),
@@ -507,7 +549,6 @@ Be analytical, not speculative. Weight hard data (rates, yields) more heavily th
         )
 
         if response and response.text:
-            import json
             analysis = json.loads(response.text)
 
             # Validate prediction
