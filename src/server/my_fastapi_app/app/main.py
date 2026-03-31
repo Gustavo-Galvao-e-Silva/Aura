@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from agents.aura_graph import aura_graph
 from db.models import Base
-from my_fastapi_app.app.config import ALLOWED_ORIGINS, MARKET_MONITOR_INTERVAL_SECONDS
+from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.db.session import engine
 from my_fastapi_app.app.state import current_state, update_state
 
@@ -27,7 +27,7 @@ async def monitor_market_loop():
         result = await aura_graph.ainvoke(current_state)
         update_state(result)
 
-        await asyncio.sleep(MARKET_MONITOR_INTERVAL_SECONDS)
+        await asyncio.sleep(settings.MARKET_MONITOR_INTERVAL_SECONDS)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,7 +63,7 @@ app = FastAPI(
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
