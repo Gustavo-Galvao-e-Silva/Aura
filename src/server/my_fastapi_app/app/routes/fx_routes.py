@@ -1,7 +1,7 @@
 import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import CotationNotify
 from my_fastapi_app.app.settings import settings
@@ -141,7 +141,7 @@ async def get_fx_provider_rates():
 
 
 @router.post("/alerts")
-async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
+async def set_quote_alert(data: QuoteAlertDTO, db: AsyncSession = Depends(get_db)):
     """
     Set up an email alert for target exchange rate.
 
@@ -158,8 +158,8 @@ async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
     )
 
     db.add(target_quote)
-    db.commit()
-    db.refresh(target_quote)
+    await db.commit()
+    await db.refresh(target_quote)
 
     return {
         "status": "success",
