@@ -15,6 +15,7 @@ import json
 from datetime import datetime
 from typing import Dict, Any
 from agents.state import AuraState
+from my_fastapi_app.app.settings import settings
 from tools.market_tools import (
     get_bcb_selic,
     get_bcb_focus,
@@ -235,8 +236,8 @@ async def sentiment_researcher_node(state: AuraState) -> Dict[str, Any]:
     }
 
     # Initialize Browser Use client
-    bu_client = AsyncBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
-    gemini_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    bu_client = AsyncBrowserUse(api_key=settings.BROWSER_USE_API_KEY)
+    gemini_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 
     # Gather news from multiple angles
     news_data = []
@@ -432,7 +433,7 @@ def market_synthesis_node(state: AuraState) -> Dict[str, Any]:
         }
 
     # Prepare the synthesis prompt
-    gemini_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    gemini_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 
     # Build a structured summary of all findings
     summary_text = "# Market Research Findings\n\n"
