@@ -1,6 +1,42 @@
-# Aura Development Commands
+# Revellio Development Commands
 
-# Start the database and adminer
+# ============================================================================
+# DOCKER MODE (Full Stack - from repository root)
+# ============================================================================
+
+# Start full stack (backend + frontend + db) in Docker
+stack-up:
+	cd ../.. && docker compose up -d
+
+# Stop full stack
+stack-down:
+	cd ../.. && docker compose down
+
+# Rebuild and restart full stack
+stack-restart:
+	cd ../.. && docker compose down && docker compose up -d --build
+
+# View logs from all services
+stack-logs:
+	cd ../.. && docker compose logs -f
+
+# View logs from backend only
+backend-logs:
+	cd ../.. && docker compose logs -f backend
+
+# View logs from frontend only
+frontend-logs:
+	cd ../.. && docker compose logs -f frontend
+
+# Wipe everything (including volumes)
+stack-wipe:
+	cd ../.. && docker compose down -v
+
+# ============================================================================
+# NATIVE MODE (Local Development - existing commands)
+# ============================================================================
+
+# Start the database and adminer (native mode)
 up:
 	docker compose up -d
 
