@@ -31,6 +31,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring."""
+    return {"status": "ok", "service": "revellio-backend"}
+
 # Register all route modules
 app.include_router(users.router)
 app.include_router(expenses.router)
