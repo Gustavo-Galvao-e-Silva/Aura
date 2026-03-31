@@ -8,14 +8,11 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first (cache layer optimization)
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
+# Copy application code first (setuptools needs packages to exist)
 COPY . .
+
+# Install Python dependencies from pyproject.toml
+RUN pip install --no-cache-dir .
 
 # Set PYTHONPATH so imports work correctly
 ENV PYTHONPATH=/app

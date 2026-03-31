@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "revellio-backend"
+version = "1.0.0"
+description = "AI-powered global finance co-pilot for international students. Manage expenses, optimize FX rates, and make intelligent payment decisions."
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {name = "Revellio Team"}
+]
+keywords = ["finance", "fx", "ai", "langgraph", "fastapi", "remittance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Framework :: FastAPI",
+]
+
+dependencies = [
+    # Core LangChain & AI
+    "langchain",
+    "langgraph",
+    "langchain-google-genai",
+    "google-generativeai",
+    "pydantic",
+
+    # Web framework
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+
+    # Database
+    "SQLAlchemy",
+    "psycopg2-binary",
+
+    # Configuration
+    "python-dotenv",
+
+    # Image processing
+    "Pillow",
+
+    # HTTP client
+    "requests",
+
+    # Browser automation
+    "browser-use-sdk",
+    "playwright",
+
+    # Market data APIs
+    "fredapi",
+    "wbgapi",
+    "yfinance",
+    "python-bcb",
+
+    # Search & sentiment
+    "tavily-python",
+
+    # Blockchain
+    "stellar-sdk",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",  # For testing FastAPI endpoints
+    "black",  # Code formatter
+    "ruff",   # Fast linter
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["my_fastapi_app*", "agents*", "db*", "tools*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "N"]
+ignore = ["E501"]  # Line length (handled by black)
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

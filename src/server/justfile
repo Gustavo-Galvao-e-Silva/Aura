@@ -64,8 +64,13 @@ upload file:
 status:
 	curl -s http://localhost:8000/status | jq .
 
+# Install dependencies (production)
 pip:
-	pip install -r requirements.txt
+	pip install .
+
+# Install dependencies with dev tools (for local development)
+pip-dev:
+	pip install -e ".[dev]"
 
 thanks:
 	echo thanks nando
