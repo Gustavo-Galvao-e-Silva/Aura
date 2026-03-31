@@ -1,9 +1,10 @@
 from datetime import date
-from my_fastapi_app.app.db.session import SessionLocal
+from sqlalchemy import select
+from my_fastapi_app.app.db.session import AsyncSessionLocal
 from db.models import Liability
 from agents.state import AuraState
 
-def orchestrator_node(state: AuraState):
+async def orchestrator_node(state: AuraState):
     """
     Role 4: The Master Orchestrator.
     Combines Market Intel, Route Facts, and DB Liabilities to make decisions.
@@ -15,12 +16,12 @@ def orchestrator_node(state: AuraState):
     - thesis (the "why")
     - risk_flags (specific concerns like election_volatility)
     """
-    db = SessionLocal()
-    try:
+    async with AsyncSessionLocal() as db:
         # 1. Fetch ALL unpaid liabilities (both actual and predicted)
-        unpaid = db.query(Liability).filter(
-            Liability.is_paid == False
-        ).all()
+        result = await db.execute(
+            select(Liability).filter(Liability.is_paid == False)
+        )
+        unpaid = result.scalars().all()
 
         if not unpaid:
             print("🎖️ Orchestrator: No unpaid liabilities.")
@@ -140,8 +141,3 @@ def orchestrator_node(state: AuraState):
             "payment_decisions": decisions_list,
             "selected_route": top_alert if top_alert else f"Aura suggests waiting. {thesis[:100]}..."
         }
-    except Exception as e:
-        print(f"❌ Orchestrator Error: {e}")
-        return {"payment_decisions": [], "selected_route": None}
-    finally:
-        db.close()
