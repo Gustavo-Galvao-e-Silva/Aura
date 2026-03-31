@@ -3,12 +3,12 @@ from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.services.mail_service import send_quote_alert_email
 from agents.state import AuraState
 from datetime import datetime
-from sqlalchemy.orm import Session
-from my_fastapi_app.app.db.session import SessionLocal
+from sqlalchemy import select
+from my_fastapi_app.app.db.session import AsyncSessionLocal
 from db.models import CotationNotify
 
 
-def smart_router_node(state: AuraState):
+async def smart_router_node(state: AuraState):
     """
     Role 3: The Fact-Finding Router.
     Pulls live provider quotes and converts them into comparable route options.
@@ -161,7 +161,7 @@ def smart_router_node(state: AuraState):
     # Best route = highest BRL received for the same USD sent
     options = sorted(options, key=lambda x: x["brl_received"], reverse=True)
 
-    notify_users_if_quote_below_target(options)
+    await notify_users_if_quote_below_target(options)
     print(f"🛰️ Router: Calculated {len(options)} live provider routes")
     #print(options)
     return {
@@ -169,7 +169,7 @@ def smart_router_node(state: AuraState):
     }
 
 
-def notify_users_if_quote_below_target(routes):
+async def notify_users_if_quote_below_target(routes):
     """
     Looks at the lowest quotation among providers and sends email alerts
     to users whose target_rate is >= current lowest quote.
@@ -192,16 +192,15 @@ def notify_users_if_quote_below_target(routes):
     max_route = max(valid_routes, key=lambda r: r["fx_used"])
     max_rate = float(max_route["fx_used"])
     provider_name = max_route["name"]
-    db: Session = SessionLocal()
-    try:
-        alerts = (
-            db.query(CotationNotify)
-            .filter(
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(CotationNotify).filter(
                 CotationNotify.rate <= max_rate,
                 CotationNotify.has_notified == False
             )
-            .all()
         )
+        alerts = result.scalars().all()
 
         if not alerts:
             print(f"📭 Notify: No users to notify. Best rate = {max_rate:.4f}")
@@ -229,14 +228,11 @@ def notify_users_if_quote_below_target(routes):
             except Exception as e:
                 print(f"⚠️ Notify: Failed to send email to {alert.email}: {e}")
 
-        db.commit()
+        await db.commit()
 
         return {
             "notifications_sent": notifications_sent,
             "best_rate": max_rate,
             "best_provider": provider_name,
         }
-
-    finally:
-        db.close()
     
