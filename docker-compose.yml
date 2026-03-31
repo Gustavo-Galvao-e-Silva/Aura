@@ -41,6 +41,8 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: revellio
+      # Force Python unbuffered output for real-time logs in Docker
+      PYTHONUNBUFFERED: 1
     volumes:
       # Mount source code for hot reload
       - ./src/server:/app
