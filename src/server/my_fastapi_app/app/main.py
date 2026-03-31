@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import asyncio
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,10 +17,45 @@ from my_fastapi_app.app.state import current_state, update_state
 from my_fastapi_app.app.routes import agents, blockchain, expenses, fx_routes, users
 
 
+async def monitor_market_loop():
+    """Background heartbeat for AI agent system"""
+    while True:
+        print("Aura heartbeat: Updating market and routes...")
+
+        result = await aura_graph.ainvoke(current_state)
+        update_state(result)
+
+        await asyncio.sleep(MARKET_MONITOR_INTERVAL_SECONDS)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern FastAPI lifespan context manager (replaces deprecated on_event)"""
+    # Startup
+    print("🚀 Revellio Backend: Startup event triggered")
+
+    print("🚀 Revellio Backend: Initializing database...")
+    Base.metadata.create_all(bind=engine)
+
+    print("🚀 Revellio Backend: Starting market monitor background task...")
+    task = asyncio.create_task(monitor_market_loop())
+    print("🚀 Revellio Backend: Startup complete!")
+
+    yield  # Application runs here
+
+    # Shutdown
+    print("👋 Revellio Backend: Shutting down...")
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 app = FastAPI(
     title="Revellio API",
     description="AI-powered global finance co-pilot for international students. Manage expenses, optimize FX rates, and make intelligent payment decisions.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware configuration
@@ -43,21 +79,3 @@ app.include_router(expenses.router)
 app.include_router(fx_routes.router)
 app.include_router(blockchain.router)
 app.include_router(agents.router)
-
-
-async def monitor_market_loop():
-    """Background heartbeat for AI agent system"""
-    while True:
-        print("Aura heartbeat: Updating market and routes...")
-
-        result = await aura_graph.ainvoke(current_state)
-        update_state(result)
-
-        await asyncio.sleep(MARKET_MONITOR_INTERVAL_SECONDS)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database and start background tasks"""
-    Base.metadata.create_all(bind=engine)
-    asyncio.create_task(monitor_market_loop())
