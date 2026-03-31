@@ -1,15 +1,5 @@
-import os
 import httpx
-from my_fastapi_app.app.config import (
-    CREBIT_API_URL,
-    WISE_API_URL,
-    REMITLY_API_URL,
-    HTTP_CLIENT_TIMEOUT,
-    REF_AMOUNT_USD,
-    WISE_FEE_USD,
-    REMITLY_FEE_USD,
-    CREBIT_FEE_USD,
-)
+from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.services.mail_service import send_quote_alert_email
 from agents.state import AuraState
 from datetime import datetime
@@ -24,16 +14,16 @@ def smart_router_node(state: AuraState):
     Pulls live provider quotes and converts them into comparable route options.
     Assumes the user is sending USD and wants to know how much BRL arrives.
     """
-    wise_api_key = os.getenv("WISE_API_KEY")
+    wise_api_key = settings.WISE_API_KEY
 
     options = []
 
     try:
-        with httpx.Client(timeout=HTTP_CLIENT_TIMEOUT) as client:
+        with httpx.Client(timeout=settings.HTTP_CLIENT_TIMEOUT) as client:
             # CREBIT
             try:
                 crebit_response = client.post(
-                    CREBIT_API_URL,
+                    settings.CREBIT_API_URL,
                     json={
                         "symbol": "USDC/BRL",
                         "quote_type": "on_ramp",
@@ -51,18 +41,18 @@ def smart_router_node(state: AuraState):
                 )
 
                 if crebit_rate is not None:
-                    net_usd = max(REF_AMOUNT_USD - CREBIT_FEE_USD, 0)
+                    net_usd = max(settings.REF_AMOUNT_USD - settings.CREBIT_FEE_USD, 0)
                     options.append(
                         {
                             "name": "Crebit",
                             "provider": "crebit",
                             "fx_used": crebit_rate,
-                            "fee_usd": CREBIT_FEE_USD,
+                            "fee_usd": settings.CREBIT_FEE_USD,
                             "eta_hours": 24,
                             "is_instant": False,
                             "description": "Student-focused route with low fees.",
                             "brl_received": net_usd * crebit_rate,
-                            "reference_usd": REF_AMOUNT_USD,
+                            "reference_usd": settings.REF_AMOUNT_USD,
                         }
                     )
             except Exception as e:
@@ -79,7 +69,7 @@ def smart_router_node(state: AuraState):
                     wise_headers["Authorization"] = f"Bearer {wise_api_key}"
 
                 wise_response = client.post(
-                    WISE_API_URL,
+                    settings.WISE_API_URL,
                     json={
                         "sourceCurrency": "USD",
                         "targetCurrency": "BRL",
@@ -98,18 +88,18 @@ def smart_router_node(state: AuraState):
 
                 if wise_rate is not None:
                     wise_rate = float(wise_rate)
-                    net_usd = max(REF_AMOUNT_USD - WISE_FEE_USD, 0)
+                    net_usd = max(settings.REF_AMOUNT_USD - settings.WISE_FEE_USD, 0)
                     options.append(
                         {
                             "name": "Wise",
                             "provider": "wise",
                             "fx_used": wise_rate,
-                            "fee_usd": WISE_FEE_USD,
+                            "fee_usd": settings.WISE_FEE_USD,
                             "eta_hours": 48,
                             "is_instant": False,
                             "description": "Traditional fintech transfer with moderate fees.",
                             "brl_received": net_usd * wise_rate,
-                            "reference_usd": REF_AMOUNT_USD,
+                            "reference_usd": settings.REF_AMOUNT_USD,
                         }
                     )
             except Exception as e:
@@ -118,7 +108,7 @@ def smart_router_node(state: AuraState):
             # REMITLY
             try:
                 remitly_response = client.get(
-                    REMITLY_API_URL,
+                    settings.REMITLY_API_URL,
                     params={
                         "conduit": "USA:USD-BRA:BRL",
                         "anchor": "SEND",
@@ -143,18 +133,18 @@ def smart_router_node(state: AuraState):
 
                 if remitly_rate is not None:
                     remitly_rate = float(remitly_rate)
-                    net_usd = max(REF_AMOUNT_USD - REMITLY_FEE_USD, 0)
+                    net_usd = max(settings.REF_AMOUNT_USD - settings.REMITLY_FEE_USD, 0)
                     options.append(
                         {
                             "name": "Remitly",
                             "provider": "remitly",
                             "fx_used": remitly_rate,
-                            "fee_usd": REMITLY_FEE_USD,
+                            "fee_usd": settings.REMITLY_FEE_USD,
                             "eta_hours": 72,
                             "is_instant": False,
                             "description": "Consumer remittance route, often strong promotional rates.",
                             "brl_received": net_usd * remitly_rate,
-                            "reference_usd": REF_AMOUNT_USD,
+                            "reference_usd": settings.REF_AMOUNT_USD,
                         }
                     )
             except Exception as e:
