@@ -3,6 +3,7 @@ load_dotenv()
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +21,8 @@ from my_fastapi_app.app.routes import agents, blockchain, expenses, fx_routes, u
 async def monitor_market_loop():
     """Background heartbeat for AI agent system"""
     while True:
-        print("Aura heartbeat: Updating market and routes...")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] Aura heartbeat: Updating market and routes...")
 
         result = await aura_graph.ainvoke(current_state)
         update_state(result)
