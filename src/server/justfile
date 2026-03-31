@@ -72,5 +72,35 @@ pip:
 pip-dev:
 	pip install -e ".[dev]"
 
+# ============================================================================
+# DATABASE MIGRATIONS (Alembic)
+# ============================================================================
+
+# Create a new migration (autogenerate from model changes)
+# Usage: just migrate "add user email column"
+migrate message:
+	PYTHONPATH=. alembic revision --autogenerate -m "{{message}}"
+
+# Apply all pending migrations
+upgrade:
+	PYTHONPATH=. alembic upgrade head
+
+# Rollback one migration
+downgrade:
+	PYTHONPATH=. alembic downgrade -1
+
+# Show current migration version
+migration-current:
+	PYTHONPATH=. alembic current
+
+# Show migration history
+migration-history:
+	PYTHONPATH=. alembic history --verbose
+
+# Rollback to specific revision
+# Usage: just migration-goto abc123
+migration-goto revision:
+	PYTHONPATH=. alembic downgrade {{revision}}
+
 thanks:
 	echo thanks nando
