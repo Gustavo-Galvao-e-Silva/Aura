@@ -6,15 +6,25 @@ from agents.state import AuraState
 from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.db.session import AsyncSessionLocal
 from db.models import AuditLog
+from tools.embeddings import generate_reasoning_embedding
 
 async def trust_engine_node(state: AuraState):
     """
     Role 5: The Trust Engine.
-    Captures the REAL Stellar TX ID and saves it to Postgres.
+    Dual-mode verification: Blockchain immutability + Semantic search.
 
-    Now enhanced to hash the full market_analysis structure, providing
-    verifiable proof of the exact thesis, confidence, and risk factors
-    that led to each payment decision.
+    1. Blockchain Layer (Stellar):
+       - Generates cryptographic hash of decision + market context
+       - Stores hash on Stellar testnet for immutable proof
+       - Returns transaction ID for public verification
+
+    2. Semantic Layer (pgvector):
+       - Generates 384-dim embedding of reasoning + market conditions
+       - Enables similarity search to detect contradictory decisions
+       - Helps identify when AI changes its mind under similar conditions
+
+    This dual approach provides both cryptographic proof (blockchain)
+    and analytical insights (semantic search) for AI explainability.
     """
     reasoning_text = state.get("selected_route") or "No action recommended."
     market_analysis = state.get("market_analysis", {})
@@ -83,16 +93,33 @@ async def trust_engine_node(state: AuraState):
             except Exception as e:
                 print(f"⚠️ Stellar Submission Failed: {e}")
 
-        # 4. Save to Postgres WITH the Stellar link
+        # 4. Generate semantic embedding for reasoning + context
+        reasoning_embedding = None
+        try:
+            reasoning_embedding = generate_reasoning_embedding(
+                reasoning_text=reasoning_text,
+                market_context={
+                    "prediction": decision_payload["market_prediction"],
+                    "confidence": decision_payload["market_confidence"],
+                    "thesis": decision_payload["market_thesis"],
+                    "risk_flags": decision_payload["risk_flags"]
+                }
+            )
+            print(f"🧬 Semantic embedding generated (384 dimensions)")
+        except Exception as e:
+            print(f"⚠️ Embedding generation failed: {e}")
+
+        # 5. Save to Postgres WITH the Stellar link AND semantic embedding
         try:
             new_log = AuditLog(
                 decision_hash=audit_hash,
                 reasoning=reasoning_text,
-                stellar_tx_id=stellar_tx_id # Save the link!
+                stellar_tx_id=stellar_tx_id,  # Blockchain link
+                reasoning_embedding=reasoning_embedding  # Semantic search
             )
             db.add(new_log)
             await db.commit()
-            print(f"🔐 Local Audit Log saved with TX reference.")
+            print(f"🔐 Local Audit Log saved with TX reference and embedding.")
         except Exception as e:
             print(f"⚠️ Database Error: {e}")
             await db.rollback()
