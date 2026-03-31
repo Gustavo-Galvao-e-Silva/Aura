@@ -16,6 +16,7 @@ import requests
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Tuple
 import yfinance as yf
+from my_fastapi_app.app.settings import settings
 
 # Try to import optional dependencies
 try:
@@ -228,7 +229,7 @@ def fetch_fred_fedfunds() -> Optional[float]:
     if not FRED_AVAILABLE:
         return None
 
-    api_key = os.getenv("FRED_API_KEY")
+    api_key = settings.FRED_API_KEY
     if not api_key:
         print("⚠️  FRED_API_KEY not set in environment")
         return None
@@ -254,7 +255,7 @@ def fetch_fred_inflation() -> Optional[Dict[str, float]]:
     if not FRED_AVAILABLE:
         return None
 
-    api_key = os.getenv("FRED_API_KEY")
+    api_key = settings.FRED_API_KEY
     if not api_key:
         return None
 
@@ -296,7 +297,7 @@ def fetch_fred_yield_curve() -> Optional[float]:
     if not FRED_AVAILABLE:
         return None
 
-    api_key = os.getenv("FRED_API_KEY")
+    api_key = settings.FRED_API_KEY
     if not api_key:
         return None
 
@@ -445,7 +446,7 @@ def fetch_tavily_news(query: str, max_results: int = 5) -> Optional[Dict[str, An
         print("⚠️  Tavily client not available")
         return None
 
-    api_key = os.getenv("TAVILY_API_KEY")
+    api_key = settings.TAVILY_API_KEY
     if not api_key:
         print("⚠️  TAVILY_API_KEY not set in environment")
         return None
