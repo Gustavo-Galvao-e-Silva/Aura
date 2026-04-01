@@ -151,4 +151,54 @@ python3 -c "from agents.state import MarketMetrics, MarketAnalysis; print('✓ I
 
 **Modified:** `src/server/agents/researchers.py`
 
-Adding `fetched_at` timestamp to both market_analysis creation points...
+**Changes made:**
+
+1. ✅ Added `fetched_at` to LLM synthesis output (line 570)
+   ```python
+   market_analysis = {
+       "prediction": prediction,
+       "confidence": confidence,
+       "thesis": analysis.get("thesis", "No thesis generated."),
+       "metrics": analysis.get("metrics", {}),
+       "risk_flags": analysis.get("risk_flags", []),
+       "fetched_at": datetime.now().isoformat()  # ← NEW
+   }
+   ```
+
+2. ✅ Added `fetched_at` to fallback analysis output (line 625)
+   ```python
+   market_analysis = {
+       "prediction": prediction,
+       "confidence": confidence,
+       "thesis": thesis,
+       "metrics": { ... },
+       "risk_flags": risk_flags,
+       "fetched_at": datetime.now().isoformat()  # ← NEW
+   }
+   ```
+
+**Benefits:**
+- ✅ Timestamp now flows through the entire pipeline
+- ✅ Trust Engine can hash data freshness
+- ✅ Audit trail shows when market data was collected
+- ✅ Can detect stale data issues during debugging
+
+#### Testing
+
+**Manual verification needed:**
+
+```bash
+cd src/server
+python3 -m py_compile agents/researchers.py
+```
+
+**Expected:** No syntax errors
+
+#### Step 1.2 Status: ✅ CODE COMPLETE - AWAITING USER VERIFICATION
+
+**Files modified:**
+- `src/server/agents/researchers.py` (added fetched_at to market_analysis in 2 places)
+
+**Next step:** Step 1.3 - Replace Orchestrator with LLM Reasoning
+
+---
