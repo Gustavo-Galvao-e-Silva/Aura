@@ -261,10 +261,10 @@ async def stripe_webhook(
     # Get or create wallet
     wallet = await _get_or_create_wallet(username, db)
 
-    balance_before = wallet.brl_available
+    balance_before = wallet.usd_available
 
     # Credit wallet
-    wallet.brl_available += amount_usd          # 1 USD ≈ 1 unit (sandbox — no FX conversion)
+    wallet.usd_available += amount_usd
     wallet.total_deposited_brl += amount_usd
     wallet.brl_pending = max(0.0, wallet.brl_pending - amount_usd)
 
@@ -279,7 +279,7 @@ async def stripe_webhook(
         direction="credit",
         amount=amount_usd,
         balance_before=balance_before,
-        balance_after=wallet.brl_available,
+        balance_after=wallet.usd_available,
         stripe_event_id=event.get("id"),
         stripe_payment_intent_id=payment_intent_id,
         description=f"Stripe deposit ${amount_usd:.2f}",
@@ -294,5 +294,5 @@ async def stripe_webhook(
 
     await db.commit()
 
-    print(f"  ✅ Credited @{username} ${amount_usd:.2f} | balance {balance_before:.2f} → {wallet.brl_available:.2f}")
+    print(f"  ✅ Credited @{username} ${amount_usd:.2f} | balance {balance_before:.2f} → {wallet.usd_available:.2f}")
     return {"received": True, "processed": True}
