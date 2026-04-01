@@ -3,13 +3,13 @@ import { useUser } from "@clerk/react-router";
 import Navbar from "../components/Navbar";
 import {
   ArrowRight,
-  Flag,
-  HelpCircle,
-  Info,
   Bell,
-  Route,
   Clock3,
   HandCoins,
+  HelpCircle,
+  Info,
+  Route,
+  ScrollText,
 } from "lucide-react";
 import apiClient from "../API/client";
 
@@ -35,6 +35,20 @@ type Liability = {
   created_at: string;
 };
 
+// ─── palette ──────────────────────────────────────────────────────────────────
+const C = {
+  bg: "#2C3930",
+  surface: "rgba(63,79,68,0.18)",
+  surfaceStrong: "rgba(63,79,68,0.28)",
+  border: "rgba(162,123,92,0.10)",
+  rose: "#A27B5C",
+  cream: "#DCD7C9",
+  muted: "rgba(220,215,201,0.50)",
+  mutedStrong: "rgba(220,215,201,0.72)",
+  success: "#34d399",
+  danger: "#f87171",
+};
+
 const providerLabelMap: Record<ProviderKey, string> = {
   crebit: "Crebit",
   wise: "Wise",
@@ -43,7 +57,7 @@ const providerLabelMap: Record<ProviderKey, string> = {
 
 const providerEtaMap: Record<ProviderKey, string> = {
   crebit: "< 1 business day",
-  wise: "1-2 business days",
+  wise: "1–2 business days",
   remitly: "Minutes to 3 business days",
 };
 
@@ -57,12 +71,6 @@ const providerImpactMap: Record<ProviderKey, string> = {
   crebit: "Best for fast conversion",
   wise: "Traditional transfer route",
   remitly: "Promotional consumer rate",
-};
-
-const providerBorderMap: Record<ProviderKey, string> = {
-  crebit: "border-blue-700",
-  wise: "border-slate-200 dark:border-slate-800",
-  remitly: "border-slate-200 dark:border-slate-800",
 };
 
 const providerLogoMap: Record<ProviderKey, string> = {
@@ -130,10 +138,8 @@ export default function TransferRoutesPage() {
       try {
         setLoadingBills(true);
 
-        const response = await apiClient.get(`/expenses/user/${user?.username}`, {
-          params: {
-            filter_by: "all",
-          },
+        const response = await apiClient.get(`/expenses/user/${user.username}`, {
+          params: { filter_by: "all" },
         });
 
         const fetchedBills: Liability[] = response.data?.["user-expenses"] ?? [];
@@ -162,7 +168,7 @@ export default function TransferRoutesPage() {
       { name: "wise", rate: rates.wise },
       { name: "remitly", rate: rates.remitly },
     ].filter(
-      (x): x is { name: string; rate: number } =>
+      (x): x is { name: ProviderKey; rate: number } =>
         typeof x.rate === "number" && !Number.isNaN(x.rate)
     );
 
@@ -200,7 +206,6 @@ export default function TransferRoutesPage() {
     const rightTotalBrl = rightNetUsd * rightRate;
 
     const winner = leftTotalBrl >= rightTotalBrl ? leftProvider : rightProvider;
-
     const savings = Math.abs(leftTotalBrl - rightTotalBrl);
 
     return {
@@ -222,12 +227,24 @@ export default function TransferRoutesPage() {
     return `1 USD = ${rate.toFixed(4)} BRL`;
   }
 
+  function formatBrl(value: number) {
+    return `R$ ${value.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
   function getBadge(provider: ProviderKey) {
-    if (!bestProvider) return null;
-    if (bestProvider.name !== provider) return null;
+    if (!bestProvider || bestProvider.name !== provider) return null;
 
     return (
-      <span className="rounded bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700 dark:bg-green-900/30 dark:text-green-400">
+      <span
+        className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+        style={{
+          background: "rgba(52,211,153,0.15)",
+          color: C.success,
+        }}
+      >
         Recommended
       </span>
     );
@@ -238,13 +255,20 @@ export default function TransferRoutesPage() {
 
     return (
       <div
-        className={`flex flex-col gap-4 rounded-xl border bg-white p-5 shadow-sm transition-all hover:border-slate-300 dark:bg-slate-900 dark:hover:border-slate-700 md:flex-row md:items-center md:gap-6 ${
-          isBest
-            ? "border-2 border-blue-700 shadow-lg shadow-blue-700/5"
-            : providerBorderMap[provider]
-        }`}
+        className="flex flex-col gap-4 rounded-2xl p-5 transition-all md:flex-row md:items-center md:gap-6"
+        style={{
+          background: C.surface,
+          border: `1px solid ${isBest ? C.rose : C.border}`,
+          boxShadow: isBest ? "0 0 0 1px rgba(162,123,92,0.18) inset" : "none",
+        }}
       >
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+        <div
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl"
+          style={{
+            background: "rgba(162,123,92,0.10)",
+            border: `1px solid ${C.border}`,
+          }}
+        >
           <img
             src={providerLogoMap[provider]}
             className="h-12 w-12 rounded-md object-contain"
@@ -254,11 +278,16 @@ export default function TransferRoutesPage() {
 
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h4 className="text-xl font-bold">{providerLabelMap[provider]}</h4>
+            <h4 className="text-xl font-bold" style={{ color: C.cream }}>
+              {providerLabelMap[provider]}
+            </h4>
             {getBadge(provider)}
           </div>
 
-          <div className="flex flex-col gap-2 text-sm text-slate-500 dark:text-slate-400 md:flex-row md:flex-wrap md:items-center md:gap-4">
+          <div
+            className="flex flex-col gap-2 text-sm md:flex-row md:flex-wrap md:items-center md:gap-4"
+            style={{ color: C.mutedStrong }}
+          >
             <div className="flex items-center gap-1">
               <span>{formatRate(rates[provider])}</span>
             </div>
@@ -277,27 +306,21 @@ export default function TransferRoutesPage() {
 
         <div className="text-left md:text-right">
           <div
-            className={`rounded-lg px-3 py-2 ${
-              isBest
-                ? "border border-blue-100 bg-blue-50 dark:border-blue-800/50 dark:bg-blue-900/20"
-                : "border border-slate-100 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
-            }`}
+            className="rounded-xl px-3 py-2"
+            style={{
+              background: isBest ? "rgba(162,123,92,0.14)" : "rgba(63,79,68,0.25)",
+              border: `1px solid ${C.border}`,
+            }}
           >
             <p
-              className={`text-[10px] font-bold uppercase tracking-tight ${
-                isBest
-                  ? "text-blue-700 dark:text-blue-400"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
+              className="text-[10px] font-bold uppercase tracking-tight"
+              style={{ color: isBest ? C.rose : C.muted }}
             >
               Estimated Impact
             </p>
             <p
-              className={`text-sm font-bold ${
-                isBest
-                  ? "text-blue-700 dark:text-blue-300"
-                  : "text-slate-700 dark:text-slate-300"
-              }`}
+              className="text-sm font-bold"
+              style={{ color: isBest ? C.rose : C.cream }}
             >
               {providerImpactMap[provider]}
             </p>
@@ -308,22 +331,44 @@ export default function TransferRoutesPage() {
   }
 
   return (
-    <div className="bg-slate-50 font-display text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="font-sans antialiased" style={{ background: C.bg, color: C.cream }}>
       <div className="flex h-screen overflow-hidden">
         <Navbar />
 
-        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
-          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/80 sm:px-6 lg:px-8">
+        <main className="flex-1 overflow-y-auto" style={{ background: C.bg }}>
+          <header
+            className="sticky top-0 z-10 flex items-center justify-between px-4 py-4 backdrop-blur-md sm:px-6 lg:px-8"
+            style={{
+              borderBottom: `1px solid ${C.border}`,
+              background: "rgba(44,57,48,0.82)",
+            }}
+          >
             <div className="flex items-center gap-2">
-              <Route className="h-5 w-5 text-blue-700" />
-              <h2 className="text-xl font-bold tracking-tight">Transfer Routes</h2>
+              <Route className="h-5 w-5" style={{ color: C.rose }} />
+              <h2 className="text-xl font-bold tracking-tight" style={{ color: C.cream }}>
+                Transfer Routes
+              </h2>
             </div>
 
             <div className="flex gap-3">
-              <button className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              <button
+                className="rounded-xl p-2"
+                style={{
+                  border: `1px solid ${C.border}`,
+                  color: C.muted,
+                  background: "transparent",
+                }}
+              >
                 <Bell className="h-5 w-5" />
               </button>
-              <button className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              <button
+                className="rounded-xl p-2"
+                style={{
+                  border: `1px solid ${C.border}`,
+                  color: C.muted,
+                  background: "transparent",
+                }}
+              >
                 <HelpCircle className="h-5 w-5" />
               </button>
             </div>
@@ -331,40 +376,65 @@ export default function TransferRoutesPage() {
 
           <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
             <div className="mb-8">
-              <h3 className="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">
+              <h3 className="text-3xl font-black tracking-tight" style={{ color: C.cream }}>
                 Route Optimization Analysis
               </h3>
-              <p className="mt-2 text-lg text-slate-500 dark:text-slate-400">
+              <p className="mt-2 text-lg" style={{ color: C.muted }}>
                 Comparative breakdown of how current exchange routes affect your
                 pending international student payments.
               </p>
             </div>
 
-            <div className="mb-8 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:gap-6">
+            <div
+              className="mb-8 flex flex-wrap items-center gap-4 rounded-2xl p-4 shadow-sm sm:gap-6"
+              style={{ background: C.surface, border: `1px solid ${C.border}` }}
+            >
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                <span
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: C.muted }}
+                >
                   Sending From
                 </span>
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
-                  <Flag className="h-4 w-4 text-blue-600" />
-                  <span className="font-bold">USD</span>
+                <div
+                  className="flex items-center gap-2 rounded-xl px-3 py-2"
+                  style={{
+                    background: C.surfaceStrong,
+                    border: `1px solid ${C.border}`,
+                  }}
+                >
+                  <ScrollText className="h-4 w-4" style={{ color: C.rose }} />
+                  <span className="font-bold" style={{ color: C.cream }}>
+                    USD
+                  </span>
                 </div>
               </div>
 
-              <ArrowRight className="h-5 w-5 text-slate-300 dark:text-slate-600" />
+              <ArrowRight className="h-5 w-5" style={{ color: C.muted }} />
 
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                <span
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: C.muted }}
+                >
                   Receiving In
                 </span>
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
-                  <Flag className="h-4 w-4 text-green-600" />
-                  <span className="font-bold">BRL</span>
+                <div
+                  className="flex items-center gap-2 rounded-xl px-3 py-2"
+                  style={{
+                    background: C.surfaceStrong,
+                    border: `1px solid ${C.border}`,
+                  }}
+                >
+                  <ScrollText className="h-4 w-4" style={{ color: C.rose }} />
+                  <span className="font-bold" style={{ color: C.cream }}>
+                    BRL
+                  </span>
                 </div>
               </div>
 
               <div className="w-full sm:ml-auto sm:w-auto">
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-xs" style={{ color: C.muted }}>
                   Best live rate:{" "}
                   {bestProvider
                     ? `${bestProvider.rate.toFixed(4)} BRL`
@@ -379,25 +449,36 @@ export default function TransferRoutesPage() {
               {getProviderCard("remitly")}
             </div>
 
-            <section className="mt-12 border-t border-slate-200 pt-12 pb-8 dark:border-slate-800">
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+            <section
+              className="mt-12 border-t pt-12 pb-8"
+              style={{ borderColor: C.border }}
+            >
+              <h3 className="text-2xl font-bold" style={{ color: C.cream }}>
                 Compare Providers
               </h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-sm" style={{ color: C.muted }}>
                 Calculate the impact on one of your actual bills using current
                 provider quotes.
               </p>
 
               <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <label
+                    className="block text-xs font-bold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
                     Select Bill
                   </label>
                   <select
                     value={selectedBillId ?? ""}
                     onChange={(e) => setSelectedBillId(Number(e.target.value))}
                     disabled={loadingBills || bills.length === 0}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-700 focus:ring-blue-700 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="w-full rounded-xl px-4 py-3 text-sm outline-none disabled:opacity-60"
+                    style={{
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      color: C.cream,
+                    }}
                   >
                     {loadingBills ? (
                       <option value="">Loading bills...</option>
@@ -414,13 +495,21 @@ export default function TransferRoutesPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <label
+                    className="block text-xs font-bold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
                     Left Provider
                   </label>
                   <select
                     value={leftProvider}
                     onChange={(e) => setLeftProvider(e.target.value as ProviderKey)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-700 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="w-full rounded-xl px-4 py-3 text-sm outline-none"
+                    style={{
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      color: C.cream,
+                    }}
                   >
                     <option value="crebit">Crebit</option>
                     <option value="wise">Wise</option>
@@ -429,13 +518,21 @@ export default function TransferRoutesPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <label
+                    className="block text-xs font-bold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
                     Right Provider
                   </label>
                   <select
                     value={rightProvider}
                     onChange={(e) => setRightProvider(e.target.value as ProviderKey)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-blue-700 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="w-full rounded-xl px-4 py-3 text-sm outline-none"
+                    style={{
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      color: C.cream,
+                    }}
                   >
                     <option value="crebit">Crebit</option>
                     <option value="wise">Wise</option>
@@ -444,12 +541,18 @@ export default function TransferRoutesPage() {
                 </div>
               </div>
 
-              <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div
+                className="mt-6 overflow-hidden rounded-2xl shadow-sm"
+                style={{ background: C.surface, border: `1px solid ${C.border}` }}
+              >
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] border-collapse text-left">
                     <thead>
-                      <tr className="bg-slate-100 dark:bg-slate-800/80">
-                        <th className="w-[34%] px-5 py-4 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                      <tr style={{ background: "rgba(63,79,68,0.25)" }}>
+                        <th
+                          className="w-[34%] px-5 py-4 text-xs font-bold uppercase tracking-widest"
+                          style={{ color: C.muted }}
+                        >
                           Metric{" "}
                           {selectedBill
                             ? `(for $${selectedBill.amount.toLocaleString()} ${selectedBill.currency})`
@@ -457,16 +560,25 @@ export default function TransferRoutesPage() {
                         </th>
 
                         <th
-                          className={`w-[33%] px-5 py-4 text-sm font-bold ${
-                            comparison?.winner === leftProvider
-                              ? "bg-blue-50 text-slate-900 dark:bg-blue-900/20 dark:text-slate-100"
-                              : "text-slate-900 dark:text-slate-100"
-                          }`}
+                          className="w-[33%] px-5 py-4 text-sm font-bold"
+                          style={{
+                            color: C.cream,
+                            background:
+                              comparison?.winner === leftProvider
+                                ? "rgba(162,123,92,0.12)"
+                                : "transparent",
+                          }}
                         >
                           <div className="flex items-center gap-2">
                             <span>{providerLabelMap[leftProvider]}</span>
                             {comparison?.winner === leftProvider && (
-                              <span className="inline-flex items-center rounded-full bg-green-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter text-white">
+                              <span
+                                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter"
+                                style={{
+                                  background: "rgba(52,211,153,0.15)",
+                                  color: C.success,
+                                }}
+                              >
                                 Winner
                               </span>
                             )}
@@ -474,16 +586,25 @@ export default function TransferRoutesPage() {
                         </th>
 
                         <th
-                          className={`w-[33%] px-5 py-4 text-sm font-bold ${
-                            comparison?.winner === rightProvider
-                              ? "bg-blue-50 text-slate-900 dark:bg-blue-900/20 dark:text-slate-100"
-                              : "text-slate-900 dark:text-slate-100"
-                          }`}
+                          className="w-[33%] px-5 py-4 text-sm font-bold"
+                          style={{
+                            color: C.cream,
+                            background:
+                              comparison?.winner === rightProvider
+                                ? "rgba(162,123,92,0.12)"
+                                : "transparent",
+                          }}
                         >
                           <div className="flex items-center gap-2">
                             <span>{providerLabelMap[rightProvider]}</span>
                             {comparison?.winner === rightProvider && (
-                              <span className="inline-flex items-center rounded-full bg-green-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter text-white">
+                              <span
+                                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter"
+                                style={{
+                                  background: "rgba(52,211,153,0.15)",
+                                  color: C.success,
+                                }}
+                              >
                                 Winner
                               </span>
                             )}
@@ -492,154 +613,107 @@ export default function TransferRoutesPage() {
                       </tr>
                     </thead>
 
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                          Bill Name
-                        </td>
-                        <td className="px-5 py-4 text-sm">
-                          {selectedBill?.name ?? "--"}
-                        </td>
-                        <td className="px-5 py-4 text-sm">
-                          {selectedBill?.name ?? "--"}
-                        </td>
-                      </tr>
+                    <tbody>
+                      {[
+                        {
+                          label: "Bill Name",
+                          left: selectedBill?.name ?? "--",
+                          right: selectedBill?.name ?? "--",
+                        },
+                        {
+                          label: "Exchange Rate",
+                          left: formatRate(rates[leftProvider]),
+                          right: formatRate(rates[rightProvider]),
+                        },
+                        {
+                          label: "Processing Fee",
+                          left: comparison ? `$${comparison.leftFee.toFixed(2)} USD` : "--",
+                          right: comparison ? `$${comparison.rightFee.toFixed(2)} USD` : "--",
+                        },
+                        {
+                          label: "Total in BRL",
+                          left: comparison ? formatBrl(comparison.leftTotalBrl) : "--",
+                          right: comparison ? formatBrl(comparison.rightTotalBrl) : "--",
+                          emphasize: true,
+                        },
+                        {
+                          label: "Estimated Arrival (ETA)",
+                          left: providerEtaMap[leftProvider],
+                          right: providerEtaMap[rightProvider],
+                        },
+                        {
+                          label: "Due Date",
+                          left: selectedBill?.due_date ?? "--",
+                          right: selectedBill?.due_date ?? "--",
+                        },
+                      ].map((row) => (
+                        <tr
+                          key={row.label}
+                          style={{ borderTop: `1px solid ${C.border}` }}
+                          className="transition-colors"
+                        >
+                          <td
+                            className="px-5 py-4 text-sm font-medium"
+                            style={{ color: C.cream }}
+                          >
+                            {row.label}
+                          </td>
 
-                      <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                          Exchange Rate
-                        </td>
-                        <td
-                          className={`px-5 py-4 text-sm ${
-                            comparison?.winner === leftProvider
-                              ? "bg-blue-50 font-semibold dark:bg-blue-900/10"
-                              : ""
-                          }`}
-                        >
-                          {formatRate(rates[leftProvider])}
-                        </td>
-                        <td
-                          className={`px-5 py-4 text-sm ${
-                            comparison?.winner === rightProvider
-                              ? "bg-blue-50 font-semibold dark:bg-blue-900/10"
-                              : ""
-                          }`}
-                        >
-                          {formatRate(rates[rightProvider])}
-                        </td>
-                      </tr>
+                          <td
+                            className={`px-5 py-4 text-sm ${row.emphasize ? "text-base font-extrabold" : ""}`}
+                            style={{
+                              color:
+                                row.emphasize && comparison?.winner === leftProvider
+                                  ? C.rose
+                                  : C.cream,
+                              background:
+                                comparison?.winner === leftProvider
+                                  ? "rgba(162,123,92,0.08)"
+                                  : "transparent",
+                            }}
+                          >
+                            {row.left}
+                          </td>
 
-                      <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                          Processing Fee
-                        </td>
-                        <td
-                          className={`px-5 py-4 text-sm ${
-                            comparison?.winner === leftProvider
-                              ? "bg-blue-50 font-semibold dark:bg-blue-900/10"
-                              : ""
-                          }`}
-                        >
-                          ${comparison ? comparison.leftFee.toFixed(2) : "--"} USD
-                        </td>
-                        <td
-                          className={`px-5 py-4 text-sm ${
-                            comparison?.winner === rightProvider
-                              ? "bg-blue-50 font-semibold dark:bg-blue-900/10"
-                              : ""
-                          }`}
-                        >
-                          ${comparison ? comparison.rightFee.toFixed(2) : "--"} USD
-                        </td>
-                      </tr>
-
-                      <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                          Total in BRL
-                        </td>
-                        <td
-                          className={`px-5 py-4 text-base font-extrabold ${
-                            comparison?.winner === leftProvider
-                              ? "bg-blue-50 text-blue-700 dark:bg-blue-900/10 dark:text-blue-400"
-                              : "text-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          {comparison
-                            ? `R$ ${comparison.leftTotalBrl.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}`
-                            : "--"}
-                        </td>
-                        <td
-                          className={`px-5 py-4 text-base font-extrabold ${
-                            comparison?.winner === rightProvider
-                              ? "bg-blue-50 text-blue-700 dark:bg-blue-900/10 dark:text-blue-400"
-                              : "text-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          {comparison
-                            ? `R$ ${comparison.rightTotalBrl.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}`
-                            : "--"}
-                        </td>
-                      </tr>
-
-                      <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                          Estimated Arrival (ETA)
-                        </td>
-                        <td
-                          className={`px-5 py-4 text-sm italic ${
-                            comparison?.winner === leftProvider
-                              ? "bg-blue-50 font-medium dark:bg-blue-900/10"
-                              : ""
-                          }`}
-                        >
-                          {providerEtaMap[leftProvider]}
-                        </td>
-                        <td
-                          className={`px-5 py-4 text-sm italic ${
-                            comparison?.winner === rightProvider
-                              ? "bg-blue-50 font-medium dark:bg-blue-900/10"
-                              : ""
-                          }`}
-                        >
-                          {providerEtaMap[rightProvider]}
-                        </td>
-                      </tr>
-
-                      <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                          Due Date
-                        </td>
-                        <td className="px-5 py-4 text-sm">
-                          {selectedBill?.due_date ?? "--"}
-                        </td>
-                        <td className="px-5 py-4 text-sm">
-                          {selectedBill?.due_date ?? "--"}
-                        </td>
-                      </tr>
+                          <td
+                            className={`px-5 py-4 text-sm ${row.emphasize ? "text-base font-extrabold" : ""}`}
+                            style={{
+                              color:
+                                row.emphasize && comparison?.winner === rightProvider
+                                  ? C.rose
+                                  : C.cream,
+                              background:
+                                comparison?.winner === rightProvider
+                                  ? "rgba(162,123,92,0.08)"
+                                  : "transparent",
+                            }}
+                          >
+                            {row.right}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
 
-                    <tfoot className="border-t-2 border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-900/10">
+                    <tfoot style={{ borderTop: `1px solid ${C.border}`, background: "rgba(162,123,92,0.08)" }}>
                       <tr>
-                        <td className="px-5 py-5 text-sm font-bold italic text-slate-900 dark:text-slate-100">
+                        <td
+                          className="px-5 py-5 text-sm font-bold italic"
+                          style={{ color: C.cream }}
+                        >
                           Total Savings on This Bill
                         </td>
                         <td className="px-5 py-5" colSpan={2}>
                           <div className="flex flex-col">
-                            <span className="text-xl font-black text-blue-700 dark:text-blue-400">
-                              {comparison
-                                ? `R$ ${comparison.savings.toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}`
-                                : "--"}
+                            <span
+                              className="text-xl font-black"
+                              style={{ color: C.rose }}
+                            >
+                              {comparison ? formatBrl(comparison.savings) : "--"}
                             </span>
-                            <span className="text-[10px] font-bold uppercase tracking-tighter text-blue-700/70 dark:text-blue-400/70">
+                            <span
+                              className="text-[10px] font-bold uppercase tracking-tighter"
+                              style={{ color: C.muted }}
+                            >
                               Difference between selected providers
                             </span>
                           </div>
@@ -651,16 +725,28 @@ export default function TransferRoutesPage() {
               </div>
             </section>
 
-            <div className="mt-12 flex items-start gap-6 rounded-xl border border-blue-700/20 bg-blue-700/5 p-6">
-              <div className="rounded-full bg-blue-700/10 p-3 text-blue-700 dark:text-blue-400">
+            <div
+              className="mt-12 flex items-start gap-6 rounded-2xl p-6"
+              style={{
+                border: `1px solid ${C.border}`,
+                background: "rgba(162,123,92,0.08)",
+              }}
+            >
+              <div
+                className="rounded-full p-3"
+                style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}
+              >
                 <Info className="h-5 w-5" />
               </div>
 
               <div>
-                <h5 className="mb-1 font-bold text-blue-700 dark:text-blue-400">
+                <h5 className="mb-1 font-bold" style={{ color: C.rose }}>
                   How routes are calculated
                 </h5>
-                <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                <p
+                  className="text-sm leading-relaxed"
+                  style={{ color: C.mutedStrong }}
+                >
                   These routes are populated from each provider&apos;s current quote
                   endpoint and compared side by side so you can quickly see which
                   service is offering the strongest USD to BRL rate currently.

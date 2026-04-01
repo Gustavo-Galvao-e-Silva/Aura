@@ -8,6 +8,16 @@ import apiClient from "../API/client";
 import { getExpenseStats, updateExpense } from "../API/ExpensesClient";
 import { useUser } from "@clerk/react-router";
 
+// ─── palette ──────────────────────────────────────────────────────────────────
+const C = {
+  bg:      "#2C3930",
+  surface: "rgba(63,79,68,0.18)",
+  border:  "rgba(162,123,92,0.1)",
+  rose:    "#A27B5C",
+  cream:   "#DCD7C9",
+  muted:   "rgba(220,215,201,0.5)",
+};
+
 type Liability = {
   id: number;
   username: string;
@@ -46,9 +56,7 @@ export default function ExpensesPage() {
 
         const [expensesResponse, statsResponse] = await Promise.all([
           apiClient.get(`/expenses/user/${user?.username}`, {
-            params: {
-              filter_by: selectedFilter,
-            },
+            params: { filter_by: selectedFilter },
           }),
           getExpenseStats(user!.username!),
         ]);
@@ -115,10 +123,16 @@ export default function ExpensesPage() {
 
   function getTabClass(filter: ExpenseFilter) {
     const isActive = selectedFilter === filter;
-
     return isActive
-      ? "border-b-2 border-blue-700 px-4 py-3 text-sm font-bold text-blue-700 sm:px-6"
-      : "border-b-2 border-transparent px-4 py-3 text-sm font-bold text-slate-400 transition-colors hover:text-slate-600 sm:px-6";
+      ? "border-b-2 px-4 py-3 text-sm font-bold sm:px-6"
+      : "border-b-2 border-transparent px-4 py-3 text-sm font-bold transition-colors sm:px-6";
+  }
+
+  function getTabStyle(filter: ExpenseFilter): React.CSSProperties {
+    const isActive = selectedFilter === filter;
+    return isActive
+      ? { borderColor: C.rose, color: C.rose }
+      : { color: C.muted };
   }
 
   function formatBRL(value: number) {
@@ -135,7 +149,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+    <div className="font-sans antialiased" style={{ background: C.bg, color: C.cream }}>
       <div className="flex min-h-screen overflow-hidden">
         <Navbar />
 
@@ -144,121 +158,110 @@ export default function ExpensesPage() {
         </Modal>
 
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <header className="flex flex-col justify-between gap-4 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:px-8">
+          <header
+            className="flex flex-col justify-between gap-4 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:px-8"
+            style={{ borderBottom: `1px solid ${C.border}` }}
+          >
             <div>
-              <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+              <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl" style={{ color: C.cream }}>
                 Expenses Management
               </h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 sm:text-base">
+              <p className="mt-1 text-sm sm:text-base" style={{ color: C.muted }}>
                 Track and convert your international student costs
               </p>
             </div>
 
             <button
               onClick={() => setModalShow(true)}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-700/25 transition-all hover:opacity-90 active:scale-95 sm:w-auto sm:py-2.5"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all hover:opacity-90 active:scale-95 sm:w-auto sm:py-2.5"
+              style={{ background: C.rose, color: C.bg }}
             >
               <CirclePlus className="h-5 w-5" />
               Add New Expense
             </button>
           </header>
 
-          <div className="grid grid-cols-1 gap-4 px-4 py-2 sm:px-6 md:grid-cols-3 lg:px-8">
-            <div className="rounded-2xl border border-blue-700/5 bg-white p-5 shadow-sm dark:bg-slate-900">
+          <div className="grid grid-cols-1 gap-4 px-4 py-4 sm:px-6 md:grid-cols-3 lg:px-8">
+            {/* Total to be paid */}
+            <div className="rounded-2xl p-5" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               <div className="mb-4 flex items-start justify-between">
-                <div className="rounded-lg bg-blue-700/10 p-2 text-blue-700">
+                <div className="rounded-lg p-2" style={{ background: `${C.rose}18`, color: C.rose }}>
                   <Banknote className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-bold tracking-wide text-slate-400 sm:text-xs">
+                <span className="text-[10px] font-bold tracking-wide sm:text-xs" style={{ color: C.muted }}>
                   TOTAL TO BE PAID
                 </span>
               </div>
-              <p className="text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
+              <p className="text-xl font-black sm:text-2xl" style={{ color: C.cream }}>
                 {formatBRL(stats.total_to_be_paid)}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs" style={{ color: C.muted }}>
                 Unpaid non-predicted expenses
               </p>
             </div>
 
-            <div className="rounded-2xl border border-blue-700/5 bg-white p-5 shadow-sm dark:bg-slate-900">
+            {/* Upcoming */}
+            <div className="rounded-2xl p-5" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               <div className="mb-4 flex items-start justify-between">
                 <div className="rounded-lg bg-yellow-100 p-2 text-yellow-600">
                   <ClockFading className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-bold tracking-wide text-slate-400 sm:text-xs">
+                <span className="text-[10px] font-bold tracking-wide sm:text-xs" style={{ color: C.muted }}>
                   UPCOMING
                 </span>
               </div>
-              <p className="text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
+              <p className="text-xl font-black sm:text-2xl" style={{ color: C.cream }}>
                 {formatBRL(stats.upcoming_total)}
               </p>
-              <p className="mt-1 text-xs text-slate-500">Due within this week</p>
+              <p className="mt-1 text-xs" style={{ color: C.muted }}>Due within this week</p>
             </div>
 
-            <div className="rounded-2xl border border-blue-700/5 bg-white p-5 shadow-sm dark:bg-slate-900">
+            {/* Overdue */}
+            <div className="rounded-2xl p-5" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               <div className="mb-4 flex items-start justify-between">
                 <div className="rounded-lg bg-red-100 p-2 text-red-600">
                   <TriangleAlert className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-bold tracking-wide text-slate-400 sm:text-xs">
+                <span className="text-[10px] font-bold tracking-wide sm:text-xs" style={{ color: C.muted }}>
                   OVERDUE
                 </span>
               </div>
-              <p className="text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
+              <p className="text-xl font-black sm:text-2xl" style={{ color: C.cream }}>
                 {formatBRL(stats.overdue_total)}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs" style={{ color: C.muted }}>
                 Immediate action required
               </p>
             </div>
           </div>
 
-          <div className="mt-4 px-4 sm:px-6 lg:px-8">
+          {/* Tabs */}
+          <div className="mt-2 px-4 sm:px-6 lg:px-8">
             <div className="overflow-x-auto">
-              <div className="flex min-w-max border-b border-blue-700/10">
-                <button
-                  className={getTabClass("all")}
-                  onClick={() => setSelectedFilter("all")}
-                >
-                  All Expenses
-                </button>
-                <button
-                  className={getTabClass("upcoming")}
-                  onClick={() => setSelectedFilter("upcoming")}
-                >
-                  Upcoming
-                </button>
-                <button
-                  className={getTabClass("paid")}
-                  onClick={() => setSelectedFilter("paid")}
-                >
-                  Paid
-                </button>
-                <button
-                  className={getTabClass("overdue")}
-                  onClick={() => setSelectedFilter("overdue")}
-                >
-                  Overdue
-                </button>
-                <button
-                  className={getTabClass("predicted")}
-                  onClick={() => setSelectedFilter("predicted")}
-                >
-                  Predicted
-                </button>
+              <div className="flex min-w-max" style={{ borderBottom: `1px solid ${C.border}` }}>
+                {(["all", "upcoming", "paid", "overdue", "predicted"] as ExpenseFilter[]).map((f) => (
+                  <button
+                    key={f}
+                    className={getTabClass(f)}
+                    style={getTabStyle(f)}
+                    onClick={() => setSelectedFilter(f)}
+                  >
+                    {f === "all" ? "All Expenses" : f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
+          {/* Table */}
           <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-            <div className="rounded-2xl border border-blue-700/5 bg-white shadow-sm dark:bg-slate-900">
+            <div className="rounded-2xl" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               {loading ? (
-                <div className="px-6 py-10 text-center text-slate-500">
+                <div className="px-6 py-10 text-center" style={{ color: C.muted }}>
                   Loading expenses...
                 </div>
               ) : expenses.length === 0 ? (
-                <div className="px-6 py-10 text-center text-slate-500">
+                <div className="px-6 py-10 text-center" style={{ color: C.muted }}>
                   No expenses found.
                 </div>
               ) : (
@@ -284,29 +287,29 @@ export default function ExpensesPage() {
                   <div className="hidden overflow-x-auto md:block">
                     <table className="w-full min-w-[760px] text-left">
                       <thead>
-                        <tr className="border-b border-blue-700/10 bg-slate-50 dark:bg-slate-800/50">
-                          <th className="w-[30%] px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: "rgba(63,79,68,0.25)" }}>
+                          <th className="w-[30%] px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
                             Expense Name
                           </th>
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
                             Due Date
                           </th>
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
                             Original Amount
                           </th>
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-blue-700">
+                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.rose }}>
                             BRL Conversion
                           </th>
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
                             Status
                           </th>
-                          <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-400">
+                          <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
                             Actions
                           </th>
                         </tr>
                       </thead>
 
-                      <tbody className="divide-y divide-blue-700/5">
+                      <tbody style={{ borderTop: `1px solid ${C.border}` }}>
                         {expenses.map((expense) => (
                           <ExpenseComponent
                             key={expense.id}
@@ -329,7 +332,6 @@ export default function ExpensesPage() {
               )}
             </div>
           </div>
-
         </main>
       </div>
     </div>
