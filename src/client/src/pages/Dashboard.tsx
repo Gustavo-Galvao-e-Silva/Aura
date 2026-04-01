@@ -12,6 +12,7 @@ import {
 import { Link, useNavigate } from "react-router";
 import Navbar from "../components/Navbar";
 import apiClient from "../API/client";
+import createUser from "../API/UserClient";
 
 type Liability = {
   id: number;
@@ -73,12 +74,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user?.username) return;
+    createUser({
+      fullName: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username,
+      email: user.primaryEmailAddress?.emailAddress ?? user.emailAddresses?.[0]?.emailAddress ?? "",
+      username: user.username,
+    }).catch(() => {});
+  }, [isLoaded, isSignedIn, user?.username]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user?.username) return;
 
     async function fetchDashboardSummary() {
       try {
         setDashboardSummaryLoading(true);
 
-        const response = await apiClient.get("/dashboard-expenses", {
+        const response = await apiClient.get("/expenses/dashboard", {
           params: {
             username: user!.username,
           },
@@ -102,11 +112,10 @@ export default function Dashboard() {
       try {
         setExpensesLoading(true);
 
-        const response = await apiClient.get("/get-user-expenses", {
+        const response = await apiClient.get(`/expenses/user/${user!.username}`, {
           params: {
             filter_by: "upcoming",
             limit: 3,
-            username: user!.username,
           },
         });
 
@@ -186,7 +195,7 @@ export default function Dashboard() {
     try {
       setIsSubmittingQuote(true);
 
-      const response = await apiClient.post("/set-quote-alert", {
+      const response = await apiClient.post("/fx/alerts", {
         username: user.username,
         email,
         target_rate: parsedQuote,

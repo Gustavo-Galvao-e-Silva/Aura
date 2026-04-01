@@ -131,7 +131,7 @@ export default function BillScheduler() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch("http://localhost:8000/status");
+        const response = await fetch("http://localhost:8000/agents/status");
         if (!response.ok) {
           throw new Error(`Failed to fetch /status: ${response.status}`);
         }

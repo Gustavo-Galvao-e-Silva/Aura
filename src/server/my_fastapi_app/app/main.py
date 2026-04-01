@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI
+from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 
 from agents.aura_graph import aura_graph
@@ -15,7 +16,7 @@ from my_fastapi_app.app.db.session import engine
 from my_fastapi_app.app.state import current_state, update_state
 
 # Import all route modules
-from my_fastapi_app.app.routes import agents, blockchain, expenses, fx_routes, users
+from my_fastapi_app.app.routes import agents, blockchain, expenses, fx_routes, payments, users
 
 
 async def monitor_market_loop():
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
     print("🚀 Revellio Backend: Initializing database...")
     # Create tables using async engine
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
 
     print("🚀 Revellio Backend: Starting market monitor background task...")
@@ -83,3 +85,4 @@ app.include_router(expenses.router)
 app.include_router(fx_routes.router)
 app.include_router(blockchain.router)
 app.include_router(agents.router)
+app.include_router(payments.router)

@@ -6,7 +6,9 @@ pydantic
 fastapi
 uvicorn[standard]
 SQLAlchemy
+asyncpg
 psycopg2-binary
+pydantic-settings
 python-dotenv
 python-multipart
 Pillow

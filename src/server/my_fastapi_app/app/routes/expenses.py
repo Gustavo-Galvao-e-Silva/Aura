@@ -71,9 +71,13 @@ async def upload_invoice(
         return {"status": "error", "message": "Extraction failed"}
 
     for item in extraction_result.get("actual_liabilities", []):
+        if isinstance(item.get("due_date"), str):
+            item["due_date"] = date.fromisoformat(item["due_date"])
         db.add(Liability(**item, username=username, is_predicted=False))
 
     for item in extraction_result.get("predicted_liabilities", []):
+        if isinstance(item.get("due_date"), str):
+            item["due_date"] = date.fromisoformat(item["due_date"])
         db.add(Liability(**item, username=username, is_predicted=True))
 
     await db.commit()

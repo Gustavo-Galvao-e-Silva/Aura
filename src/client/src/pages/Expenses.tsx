@@ -45,9 +45,8 @@ export default function ExpensesPage() {
         setLoading(true);
 
         const [expensesResponse, statsResponse] = await Promise.all([
-          apiClient.get("/get-user-expenses", {
+          apiClient.get(`/expenses/user/${user?.username}`, {
             params: {
-              username: user?.username,
               filter_by: selectedFilter,
             },
           }),

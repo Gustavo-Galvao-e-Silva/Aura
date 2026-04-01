@@ -21,10 +21,10 @@ def upgrade() -> None:
     # Enable pgvector extension
     op.execute('CREATE EXTENSION IF NOT EXISTS vector')
 
-    # Add vector column to audit_log table
+    # Add vector column to audit_log table (idempotent — column may already exist)
     # Using 384 dimensions for 'all-MiniLM-L6-v2' sentence-transformer model
-    op.add_column('audit_log',
-        sa.Column('reasoning_embedding', Vector(384), nullable=True)
+    op.execute(
+        "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS reasoning_embedding VECTOR(384)"
     )
 
 
