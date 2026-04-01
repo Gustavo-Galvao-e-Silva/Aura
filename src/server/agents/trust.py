@@ -36,6 +36,7 @@ async def trust_engine_node(state: AuraState):
         "market_thesis": market_analysis.get("thesis", ""),
         "risk_flags": market_analysis.get("risk_flags", []),
         "market_metrics": market_analysis.get("metrics", {}),
+        "data_fetched_at": market_analysis.get("fetched_at", None),  # Phase 1 Step 1.4: timestamp provenance
         "current_fx_rate": state.get("current_fx_rate"),
         "reasoning": reasoning_text,
         "payment_decisions": state.get("payment_decisions")
@@ -102,7 +103,8 @@ async def trust_engine_node(state: AuraState):
                     "prediction": decision_payload["market_prediction"],
                     "confidence": decision_payload["market_confidence"],
                     "thesis": decision_payload["market_thesis"],
-                    "risk_flags": decision_payload["risk_flags"]
+                    "risk_flags": decision_payload["risk_flags"],
+                    "data_fetched_at": decision_payload["data_fetched_at"]  # Phase 1 Step 1.4: semantic search can filter by data freshness
                 }
             )
             print(f"🧬 Semantic embedding generated (384 dimensions)")
