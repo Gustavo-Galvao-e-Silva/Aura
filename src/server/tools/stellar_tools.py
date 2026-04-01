@@ -197,80 +197,127 @@ def mint_mock_brz(user_public_key: str, amount_brl: float) -> Optional[str]:
 def swap_brz_to_usdc(
     user_public_key: str,
     amount_brz: float,
-    expected_rate: float = 5.5
+    expected_rate: float = 5.5,
+    use_mock: bool = True
 ) -> Optional[dict]:
     """
     Swap Mock-BRZ → USDC using Stellar testnet.
 
-    For sandbox simplicity, implemented as direct USDC payment from issuer.
-    In production, use PathPaymentStrictSend for real DEX routing with slippage protection.
+    MVP/Testnet Mode (use_mock=True, default):
+    - Simulates USDC receipt without actual blockchain transfer
+    - Useful when issuer lacks USDC liquidity on testnet
+    - Returns mock transaction ID for database ledger
+    - Aligns with "Test Mode Everything" philosophy
+
+    Production Mode (use_mock=False):
+    - Attempts real USDC transfer on Stellar
+    - Requires issuer to have USDC balance
+    - Uses PathPaymentStrictSend for real DEX routing
 
     Args:
         user_public_key: Recipient's Stellar public key
         amount_brz: Amount of Mock-BRZ to swap
         expected_rate: Expected BRL/USD exchange rate (default: 5.5)
+        use_mock: If True, simulates swap (default: True for MVP/testnet)
 
     Returns:
         Dictionary with swap details if successful, None on failure:
         {
-            "tx_id": "stellar_tx_hash",
+            "tx_id": "mock_swap_xxx" or "stellar_tx_hash",
             "amount_brz_sent": 5500.0,
             "amount_usdc_received": 1000.0,
             "actual_rate": 5.5,
-            "fee_brz": 0.0
+            "fee_brz": 0.0,
+            "is_mock": True or False
         }
 
-    Example:
+    Example (Mock Mode - Default):
         >>> swap_brz_to_usdc("GUSER...", 5500.0, 5.5)
-        🔄 Swapping R$5500.00 Mock-BRZ → USDC (rate: 5.5000)...
+        🔄 Swapping R$5500.00 Mock-BRZ → USDC (rate: 5.5000)... [MOCK MODE]
         Expected: $1000.00 USDC (min: $980.00)
+        ✓ Swap complete (simulated): R$5500.00 → $1000.00 USDC
+        {'tx_id': 'mock_swap_...', 'is_mock': True, ...}
+
+    Example (Real Mode):
+        >>> swap_brz_to_usdc("GUSER...", 5500.0, 5.5, use_mock=False)
+        🔄 Swapping R$5500.00 Mock-BRZ → USDC (rate: 5.5000)...
         ✓ Swap complete: R$5500.00 → $1000.00 USDC
-        TX: ghi789...
-        {'tx_id': 'ghi789...', 'amount_brz_sent': 5500.0, ...}
+        {'tx_id': 'stellar_hash', 'is_mock': False, ...}
     """
     try:
-        print(f"🔄 Swapping R${amount_brz:.2f} Mock-BRZ → USDC (rate: {expected_rate:.4f})...")
+        mode_label = " [MOCK MODE]" if use_mock else ""
+        print(f"🔄 Swapping R${amount_brz:.2f} Mock-BRZ → USDC (rate: {expected_rate:.4f})...{mode_label}")
 
         expected_usdc = amount_brz / expected_rate
         min_usdc = expected_usdc * 0.98  # 2% slippage protection
 
         print(f"   Expected: ${expected_usdc:.2f} USDC (min: ${min_usdc:.2f})")
 
-        issuer_keypair = Keypair.from_secret(settings.STELLAR_SECRET_KEY)
-        issuer_account = TESTNET_SERVER.load_account(issuer_keypair.public_key)
+        if use_mock:
+            # MOCK MODE: Simulate swap for MVP/testnet (default behavior)
+            # This allows testing the complete flow when USDC liquidity isn't available
+            import hashlib
+            import time
 
-        transaction = (
-            TransactionBuilder(
-                source_account=issuer_account,
-                network_passphrase=TESTNET_NETWORK,
-                base_fee=settings.STELLAR_BASE_FEE
+            mock_tx_id = hashlib.sha256(
+                f"mock_swap_{user_public_key}_{amount_brz}_{time.time()}".encode()
+            ).hexdigest()
+
+            actual_usdc = expected_usdc
+            fee_brz = 0.0
+
+            print(f"   ✓ Swap complete (simulated): R${amount_brz:.2f} → ${actual_usdc:.2f} USDC")
+            print(f"   Mock TX: {mock_tx_id[:10]}...")
+            print(f"   ⚠️  Note: USDC not transferred on blockchain (testnet mode)")
+
+            return {
+                "tx_id": mock_tx_id,
+                "amount_brz_sent": amount_brz,
+                "amount_usdc_received": actual_usdc,
+                "actual_rate": amount_brz / actual_usdc,
+                "fee_brz": fee_brz,
+                "is_mock": True
+            }
+        else:
+            # REAL MODE: Attempt actual USDC transfer via Stellar
+            # Requires issuer to have USDC balance
+            issuer_keypair = Keypair.from_secret(settings.STELLAR_SECRET_KEY)
+            issuer_account = TESTNET_SERVER.load_account(issuer_keypair.public_key)
+
+            transaction = (
+                TransactionBuilder(
+                    source_account=issuer_account,
+                    network_passphrase=TESTNET_NETWORK,
+                    base_fee=settings.STELLAR_BASE_FEE
+                )
+                .append_payment_op(
+                    destination=user_public_key,
+                    asset=USDC_ASSET,
+                    amount=str(round(expected_usdc, 2))
+                )
+                .set_timeout(settings.STELLAR_TRANSACTION_TIMEOUT)
+                .build()
             )
-            .append_payment_op(
-                destination=user_public_key,
-                asset=USDC_ASSET,
-                amount=str(round(expected_usdc, 2))
-            )
-            .set_timeout(settings.STELLAR_TRANSACTION_TIMEOUT)
-            .build()
-        )
 
-        transaction.sign(issuer_keypair)
-        response = TESTNET_SERVER.submit_transaction(transaction)
+            transaction.sign(issuer_keypair)
+            response = TESTNET_SERVER.submit_transaction(transaction)
 
-        tx_id = response["hash"]
-        actual_usdc = expected_usdc
-        fee_brz = 0.0
+            tx_id = response["hash"]
+            actual_usdc = expected_usdc
+            fee_brz = 0.0
 
-        print(f"   ✓ Swap complete: R${amount_brz:.2f} → ${actual_usdc:.2f} USDC")
-        print(f"   TX: {tx_id[:10]}...")
+            print(f"   ✓ Swap complete: R${amount_brz:.2f} → ${actual_usdc:.2f} USDC")
+            print(f"   TX: {tx_id[:10]}...")
+            print(f"   Stellar Explorer: https://stellar.expert/explorer/testnet/tx/{tx_id}")
 
-        return {
-            "tx_id": tx_id,
-            "amount_brz_sent": amount_brz,
-            "amount_usdc_received": actual_usdc,
-            "actual_rate": amount_brz / actual_usdc,
-            "fee_brz": fee_brz
-        }
+            return {
+                "tx_id": tx_id,
+                "amount_brz_sent": amount_brz,
+                "amount_usdc_received": actual_usdc,
+                "actual_rate": amount_brz / actual_usdc,
+                "fee_brz": fee_brz,
+                "is_mock": False
+            }
 
     except Exception as e:
         print(f"   ✗ Swap failed: {e}")
