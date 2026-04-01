@@ -1,0 +1,98 @@
+# Revellio Full Stack - Local Development (Offline Mode)
+#
+# Use this instead of docker-compose.yml if you want to run with a local PostgreSQL
+# database instead of Supabase (e.g., for offline development, testing migrations, etc.)
+#
+# Usage:
+#   docker-compose -f docker-compose.local.yml up -d
+#   docker-compose -f docker-compose.local.yml down
+
+version: '3.8'
+
+services:
+
+  # Local PostgreSQL with pgvector
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: revellio-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-revellio}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Adminer - Database UI
+  adminer:
+    image: adminer
+    container_name: revellio-adminer-local
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  # Backend: FastAPI + LangGraph Agents
+  backend:
+    build:
+      context: ./src/server
+      dockerfile: Dockerfile
+    container_name: revellio-backend-local
+    restart: unless-stopped
+    command: uvicorn my_fastapi_app.app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./src/server/.env
+    environment:
+      # Override DATABASE_URL to use local Docker database
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/revellio
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: revellio
+      # Force Python unbuffered output for real-time logs in Docker
+      PYTHONUNBUFFERED: 1
+    volumes:
+      # Mount source code for hot reload
+      - ./src/server:/app
+      # Exclude cache and virtual envs from sync
+      - /app/__pycache__
+      - /app/.venv
+      - /app/.pytest_cache
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Frontend: React + Vite
+  frontend:
+    build:
+      context: ./src/client
+      dockerfile: Dockerfile
+    container_name: revellio-frontend-local
+    restart: unless-stopped
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      # Mount source for hot reload
+      - ./src/client:/app
+      # Exclude node_modules (use container's version)
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+    driver: local
