@@ -1,11 +1,12 @@
 """
-Payments routes — Stripe Checkout lifecycle + wallet balance + transaction history.
+Payments routes — Stripe Checkout lifecycle + wallet balance + transaction history + stablecoin settlement.
 
 Flow:
   1. POST /payments/checkout      → create Stripe session + Checkout row (status=created)
   2. GET  /payments/balance/{u}   → read Wallet row (or return defaults if no wallet yet)
   3. GET  /payments/history/{u}   → paginated Transaction rows
   4. POST /payments/webhook       → Stripe webhook: complete Checkout, credit Wallet, write Transaction
+  5. POST /payments/settle        → END-TO-END STABLECOIN FLOW: BRL → Mock-BRZ → USDC → pay bill
 """
 
 from datetime import datetime, timezone
@@ -16,10 +17,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from stellar_sdk import Keypair
 
-from db.models import Checkout, Transaction, Users, Wallet
+from db.models import Checkout, Liability, Transaction, Users, Wallet
 from my_fastapi_app.app.db.session import get_db
 from my_fastapi_app.app.settings import settings
+from my_fastapi_app.app.services.mail_service import send_payment_receipt_email
+from tools.stellar_tools import ensure_account_exists, establish_trustline, mint_mock_brz, swap_brz_to_usdc, MOCK_BRZ_ASSET, USDC_ASSET
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -58,6 +62,34 @@ class TransactionItem(BaseModel):
     balance_after: Optional[float]
     description: str
     stripe_payment_intent_id: Optional[str]
+
+
+class SettlementRequest(BaseModel):
+    """Request to settle a liability using stablecoin flow (BRL → Mock-BRZ → USDC → USD)."""
+    username: str
+    liability_id: int
+
+
+class SettlementResponse(BaseModel):
+    """Response with complete settlement details and blockchain proof."""
+    status: str  # "success" | "failed"
+    message: str
+
+    # Bill details
+    liability_id: int
+    liability_name: str
+    amount_usd: float
+    amount_brl_spent: float
+    fx_rate: float
+
+    # Blockchain transaction IDs (audit trail)
+    stellar_mint_tx: Optional[str]
+    stellar_swap_tx: Optional[str]
+    database_transaction_id: int
+
+    # Updated wallet balances
+    new_balance_brl: float
+    new_balance_usd: float
 
 
 # ============================================================================
@@ -296,3 +328,235 @@ async def stripe_webhook(
 
     print(f"  ✅ Credited @{username} ${amount_usd:.2f} | balance {balance_before:.2f} → {wallet.usd_available:.2f}")
     return {"received": True, "processed": True}
+
+
+@router.post("/settle", response_model=SettlementResponse)
+async def settle_payment(
+    payment: SettlementRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    🚀 END-TO-END STABLECOIN SETTLEMENT FLOW
+
+    This is the magic that happens when a user clicks "Pay Now" on a bill.
+
+    Flow:
+    1. Verify user has sufficient BRL balance in wallet
+    2. Load the liability (bill) to be paid
+    3. Calculate BRL needed based on current FX rate
+    4. Create ephemeral Stellar account for user
+    5. Mint Mock-BRZ to Stellar account (BRL → stablecoin on blockchain)
+    6. Swap Mock-BRZ → USDC on Stellar testnet (or mock mode for MVP)
+    7. Update database: debit BRL from wallet, mark liability as paid
+    8. Create immutable transaction record with blockchain proof
+    9. Return complete audit trail with all transaction IDs
+
+    This connects Web2 (Stripe/database) with Web2.5 (blockchain proof layer).
+    """
+    print(f"💰 Starting stablecoin settlement for {payment.username}, liability {payment.liability_id}")
+
+    # ========================================================================
+    # Step 1: Load user and verify they exist
+    # ========================================================================
+    result = await db.execute(select(Users).where(Users.username == payment.username))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # ========================================================================
+    # Step 2: Load liability and verify it exists + belongs to user + unpaid
+    # ========================================================================
+    result = await db.execute(
+        select(Liability).where(
+            Liability.id == payment.liability_id,
+            Liability.username == payment.username
+        )
+    )
+    liability = result.scalar_one_or_none()
+
+    if not liability:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Liability {payment.liability_id} not found for user {payment.username}"
+        )
+
+    if liability.is_paid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Liability {payment.liability_id} is already paid"
+        )
+
+    # ========================================================================
+    # Step 3: Get or create wallet, check balance
+    # ========================================================================
+    wallet = await _get_or_create_wallet(payment.username, db)
+
+    # Use hardcoded FX rate for MVP (later: call /fx/rates endpoint)
+    fx_rate = 5.5  # 1 USD = 5.5 BRL
+    amount_usd = liability.amount
+    amount_brl_needed = amount_usd * fx_rate
+
+    print(f"   Liability: {liability.name} = ${amount_usd:.2f} USD")
+    print(f"   FX Rate: {fx_rate:.2f} BRL/USD")
+    print(f"   BRL needed: R${amount_brl_needed:.2f}")
+    print(f"   Wallet BRL available: R${wallet.brl_available:.2f}")
+
+    if wallet.brl_available < amount_brl_needed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient BRL balance. Need R${amount_brl_needed:.2f}, have R${wallet.brl_available:.2f}"
+        )
+
+    # ========================================================================
+    # Step 4: Create ephemeral Stellar account for this transaction
+    # ========================================================================
+    print(f"   🌟 Creating ephemeral Stellar account...")
+    user_keypair = Keypair.random()
+    user_public_key = user_keypair.public_key
+
+    # Fund via Friendbot (testnet faucet)
+    if not ensure_account_exists(user_public_key):
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create Stellar account via Friendbot"
+        )
+
+    # Establish trustlines to Mock-BRZ and USDC
+    brz_trustline = establish_trustline(user_keypair, MOCK_BRZ_ASSET)
+    usdc_trustline = establish_trustline(user_keypair, USDC_ASSET)
+
+    if not brz_trustline or not usdc_trustline:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to establish Stellar trustlines"
+        )
+
+    print(f"   ✅ Stellar account created: {user_public_key[:10]}...")
+
+    # ========================================================================
+    # Step 5: Mint Mock-BRZ (BRL → stablecoin on blockchain)
+    # ========================================================================
+    print(f"   🪙 Minting R${amount_brl_needed:.2f} Mock-BRZ...")
+
+    stellar_mint_tx = mint_mock_brz(user_public_key, amount_brl_needed)
+
+    if not stellar_mint_tx:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to mint Mock-BRZ on Stellar testnet"
+        )
+
+    print(f"   ✅ Mock-BRZ minted: {stellar_mint_tx[:10]}...")
+    print(f"      Stellar Explorer: https://stellar.expert/explorer/testnet/tx/{stellar_mint_tx}")
+
+    # ========================================================================
+    # Step 6: Swap Mock-BRZ → USDC (stablecoin conversion)
+    # ========================================================================
+    print(f"   🔄 Swapping R${amount_brl_needed:.2f} Mock-BRZ → ${amount_usd:.2f} USDC...")
+
+    swap_result = swap_brz_to_usdc(
+        user_public_key=user_public_key,
+        amount_brz=amount_brl_needed,
+        expected_rate=fx_rate,
+        use_mock=True  # MVP: use mock mode (no real USDC transferred on blockchain)
+    )
+
+    if not swap_result:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to swap Mock-BRZ to USDC"
+        )
+
+    stellar_swap_tx = swap_result["tx_id"]
+    amount_usdc_received = swap_result["amount_usdc_received"]
+
+    print(f"   ✅ Swap complete: R${amount_brl_needed:.2f} → ${amount_usdc_received:.2f} USDC")
+    print(f"      TX: {stellar_swap_tx[:10]}...")
+
+    # ========================================================================
+    # Step 7: Update database - debit BRL, mark liability as paid
+    # ========================================================================
+    print(f"   💾 Updating database...")
+
+    brl_balance_before = wallet.brl_available
+
+    # Debit BRL from wallet
+    wallet.brl_available -= amount_brl_needed
+    wallet.total_spent_brl += amount_brl_needed
+
+    # Mark liability as paid
+    liability.is_paid = True
+
+    # Create immutable transaction record with blockchain proof
+    tx = Transaction(
+        username=payment.username,
+        wallet_id=wallet.id,
+        liability_id=liability.id,
+        transaction_type="payment",
+        status="completed",
+        asset="BRL",
+        direction="debit",
+        amount=amount_brl_needed,
+        balance_before=brl_balance_before,
+        balance_after=wallet.brl_available,
+        description=f"Paid {liability.name} (${amount_usd:.2f}) via stablecoin flow",
+        metadata_json={
+            "stellar_mint_tx": stellar_mint_tx,
+            "stellar_swap_tx": stellar_swap_tx,
+            "fx_rate": fx_rate,
+            "amount_usd": amount_usd,
+            "amount_brz": amount_brl_needed,
+            "amount_usdc_received": amount_usdc_received,
+            "stellar_account": user_public_key,
+            "is_mock_swap": swap_result.get("is_mock", False)
+        }
+    )
+    db.add(tx)
+
+    await db.commit()
+    await db.refresh(tx)  # Get the generated transaction ID
+
+    print(f"   ✅ Database updated:")
+    print(f"      BRL balance: R${brl_balance_before:.2f} → R${wallet.brl_available:.2f}")
+    print(f"      Liability marked as paid: {liability.name}")
+    print(f"      Transaction ID: {tx.id}")
+
+    # ========================================================================
+    # Step 8: Send email receipt with blockchain proof
+    # ========================================================================
+    print(f"   📧 Sending payment receipt email...")
+
+    try:
+        send_payment_receipt_email(
+            to_email=user.email,
+            username=payment.username,
+            liability_name=liability.name,
+            amount_usd=amount_usd,
+            amount_brl_spent=amount_brl_needed,
+            fx_rate=fx_rate,
+            stellar_mint_tx=stellar_mint_tx,
+            stellar_swap_tx=stellar_swap_tx,
+            transaction_id=tx.id
+        )
+    except Exception as e:
+        print(f"   ⚠️  Email sending failed (non-fatal): {e}")
+        # Don't fail the whole settlement if email fails
+
+    # ========================================================================
+    # Step 9: Return complete audit trail
+    # ========================================================================
+    return SettlementResponse(
+        status="success",
+        message=f"Successfully paid {liability.name} using stablecoin flow",
+        liability_id=liability.id,
+        liability_name=liability.name,
+        amount_usd=amount_usd,
+        amount_brl_spent=amount_brl_needed,
+        fx_rate=fx_rate,
+        stellar_mint_tx=stellar_mint_tx,
+        stellar_swap_tx=stellar_swap_tx,
+        database_transaction_id=tx.id,
+        new_balance_brl=wallet.brl_available,
+        new_balance_usd=wallet.usd_available
+    )
