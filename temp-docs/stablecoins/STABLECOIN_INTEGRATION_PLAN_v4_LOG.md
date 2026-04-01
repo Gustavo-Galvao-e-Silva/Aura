@@ -719,3 +719,41 @@ curl -X POST http://localhost:8000/expenses/create \
 **Awaiting user instruction:** Should we proceed with Phase 2 Step 2.3 (Stellar Testnet Tools)?
 
 ---
+
+## 📦 Phase 2: Stablecoin Sandbox Implementation
+
+**Status:** 🔄 IN PROGRESS
+
+### Step 2.3: Stellar Testnet Tools
+
+**Goal:** Implement Mock-BRZ minting and USDC conversion on Stellar testnet
+
+**Estimated Time:** 2 hours
+**Started:** 2026-04-01
+
+#### Pre-Implementation Analysis
+
+**What We Need to Build:**
+
+**File to create:** `src/server/tools/stellar_tools.py`
+
+**Functions required:**
+1. `ensure_account_exists(public_key)` - Check/fund account via Friendbot
+2. `establish_trustline(user_keypair, asset)` - Allow user to hold custom assets
+3. `mint_mock_brz(user_public_key, amount_brl)` - Issue Mock-BRZ from Revellio issuer
+4. `swap_brz_to_usdc(user_public_key, amount_brz, expected_rate)` - Convert BRZ → USDC
+
+**External Dependencies:**
+- Stellar SDK: `from stellar_sdk import Server, Keypair, TransactionBuilder, Network, Asset`
+- Stellar Testnet Horizon: `https://horizon-testnet.stellar.org`
+- Friendbot faucet: `https://friendbot.stellar.org`
+- Circle USDC issuer (testnet): `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`
+
+**Settings needed:**
+- `STELLAR_MOCK_BRZ_ISSUER` - Revellio's testnet public key for issuing Mock-BRZ
+- `STELLAR_SECRET_KEY` - Already configured (used by trust engine)
+- `STELLAR_BASE_FEE` - Already configured
+- `STELLAR_TRANSACTION_TIMEOUT` - Already configured
+
+#### Implementation
+
