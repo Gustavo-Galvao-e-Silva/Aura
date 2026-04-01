@@ -65,6 +65,9 @@ dependencies = [
     # Blockchain
     "stellar-sdk",
 
+    # Payments
+    "stripe",
+
     # Semantic search & embeddings
     "pgvector",
     "sentence-transformers",
