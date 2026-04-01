@@ -1,28 +1,57 @@
-# PostgreSQL database and Adminer (database UI)
-# Configure credentials in .env file
+# Revellio Backend - Docker Compose (Supabase Configuration)
+#
+# This setup uses Supabase for the database (no local PostgreSQL needed).
+# Just run: docker-compose up -d
+
+version: '3.8'
 
 services:
 
-  db:
-    image: postgres
-    restart: always
-    # set shared memory limit when using docker compose
-    shm_size: 128mb
-    # or set shared memory limit when deploy via swarm stack
-    #volumes:
-    #  - type: tmpfs
-    #    target: /dev/shm
-    #    tmpfs:
-    #      size: 134217728 # 128*2^20 bytes = 128Mb
+  # FastAPI Backend Application
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: revellio-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for hot reload during development
+      - .:/app
+      - /app/.venv  # Exclude .venv from mount (use container's venv)
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-revellio}
-    ports:
-      - "5432:5432"
+      # Load from .env file (contains Supabase connection string)
+      - DATABASE_URL=${DATABASE_URL}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
+      - FRED_API_KEY=${FRED_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - STELLAR_SECRET_KEY=${STELLAR_SECRET_KEY}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+    env_file:
+      - .env
+    command: uvicorn my_fastapi_app.app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
+  # Optional: Adminer (Database UI) - can connect to Supabase if needed
+  # Uncomment if you want a local database UI (Supabase has its own dashboard though)
+  # adminer:
+  #   image: adminer
+  #   container_name: revellio-adminer
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     ADMINER_DEFAULT_SERVER: db.ijuoyrlmuogaqiuwskzr.supabase.co
+  #     ADMINER_DESIGN: dracula
+
+# No volumes needed since we're using Supabase (cloud database)
