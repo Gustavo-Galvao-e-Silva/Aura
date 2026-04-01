@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: Optional[str] = None       # Stripe payments secret key (sk_test_...)
     STRIPE_WEBHOOK_SECRET: Optional[str] = None   # Stripe webhook signing secret (whsec_...)
     WISE_API_KEY: Optional[str] = None            # Optional: Wise payments
+    CIRCLE_API_KEY: Optional[str] = None          # Circle Sandbox API key
+    CIRCLE_USDC_HOT_WALLET: Optional[str] = None  # Circle USDC custody wallet address (Ethereum)
 
     # ============================================================================
     # Database Configuration
