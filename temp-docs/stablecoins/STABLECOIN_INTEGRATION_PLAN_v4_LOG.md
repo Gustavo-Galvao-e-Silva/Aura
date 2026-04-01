@@ -757,3 +757,198 @@ curl -X POST http://localhost:8000/expenses/create \
 
 #### Implementation
 
+
+**Modified:** `src/server/tools/stellar_tools.py` (NEW FILE - 288 lines)
+
+**Functions Implemented:**
+
+**1. `ensure_account_exists(public_key: str) -> bool`**
+- Checks if Stellar account exists on testnet
+- Auto-funds via Friendbot if account doesn't exist
+- Returns True if account exists or was successfully created
+
+```python
+>>> ensure_account_exists("GAXXX...")
+✓ Account exists: GAXXX...
+True
+```
+
+**2. `establish_trustline(user_keypair: Keypair, asset: Asset) -> Optional[str]`**
+- Establishes trustline to custom asset (BRZ or USDC)
+- Required before user can receive tokens
+- Returns transaction hash or "already_exists"
+
+```python
+>>> user_kp = Keypair.from_secret("S...")
+>>> establish_trustline(user_kp, MOCK_BRZ_ASSET)
+✓ Trustline established for BRZ: abc123...
+'abc123...'
+```
+
+**3. `mint_mock_brz(user_public_key: str, amount_brl: float) -> Optional[str]`**
+- Mints Mock-BRZ tokens from Revellio issuer
+- Sends to user's Stellar account
+- Simulates BRL → BRZ stablecoin conversion
+
+```python
+>>> mint_mock_brz("GUSER...", 5500.0)
+🪙 Minting R$5500.00 Mock-BRZ for GUSER...
+✓ Minted R$5500.00 Mock-BRZ: def456...
+Stellar Explorer: https://stellar.expert/explorer/testnet/tx/def456...
+'def456...'
+```
+
+**4. `swap_brz_to_usdc(user_public_key: str, amount_brz: float, expected_rate: float) -> Optional[dict]`**
+- Swaps Mock-BRZ → USDC (simplified sandbox implementation)
+- Production would use PathPaymentStrictSend for real DEX
+- Returns swap details with transaction hash
+
+```python
+>>> swap_brz_to_usdc("GUSER...", 5500.0, 5.5)
+🔄 Swapping R$5500.00 Mock-BRZ → USDC (rate: 5.5000)...
+Expected: $1000.00 USDC (min: $980.00)
+✓ Swap complete: R$5500.00 → $1000.00 USDC
+TX: ghi789...
+{'tx_id': 'ghi789...', 'amount_brz_sent': 5500.0, 'amount_usdc_received': 1000.0, ...}
+```
+
+**Key Features:**
+- ✅ Complete docstrings with usage examples
+- ✅ Error handling with descriptive print messages
+- ✅ Stellar testnet integration (Friendbot, Horizon API)
+- ✅ 2% slippage protection on swaps
+- ✅ Support for Circle's USDC testnet asset
+- ✅ Transaction hash returned for blockchain verification
+
+**Modified:** `src/server/my_fastapi_app/app/settings.py`
+
+**Change:** Added `STELLAR_MOCK_BRZ_ISSUER` setting (line 97)
+
+```python
+# Before:
+# ============================================================================
+# Stellar Blockchain Settings
+# ============================================================================
+
+STELLAR_TRANSACTION_TIMEOUT: int = 30
+STELLAR_BASE_FEE: int = 100
+STELLAR_EXPLORER_BASE_URL: str = "https://stellar.expert/explorer/testnet/tx"
+
+# After:
+# ============================================================================
+# Stellar Blockchain Settings
+# ============================================================================
+
+STELLAR_MOCK_BRZ_ISSUER: str  # Revellio's testnet public key for issuing Mock-BRZ (starts with 'G')
+STELLAR_TRANSACTION_TIMEOUT: int = 30
+STELLAR_BASE_FEE: int = 100
+STELLAR_EXPLORER_BASE_URL: str = "https://stellar.expert/explorer/testnet/tx"
+```
+
+**Why:** Mock-BRZ needs a defined issuer account for Stellar's asset system
+
+#### Configuration Required
+
+**Before using stellar_tools, add to `.env`:**
+
+```bash
+# Stellar Mock-BRZ Issuer (your testnet public key)
+STELLAR_MOCK_BRZ_ISSUER=GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+# Already configured (from Trust Engine):
+# STELLAR_SECRET_KEY=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+**To create a new Stellar testnet account:**
+
+```bash
+# Option 1: Use Stellar Laboratory
+# Visit: https://laboratory.stellar.org/#account-creator?network=test
+
+# Option 2: Use Python SDK
+python3 -c "
+from stellar_sdk import Keypair
+kp = Keypair.random()
+print(f'Public Key: {kp.public_key}')
+print(f'Secret Key: {kp.secret}')
+"
+
+# Fund the account
+curl "https://friendbot.stellar.org?addr=<PUBLIC_KEY>"
+```
+
+#### Testing
+
+**Manual verification commands:**
+
+```bash
+cd src/server
+
+# 1. Verify syntax (requires Python environment)
+python3 -m py_compile tools/stellar_tools.py
+python3 -m py_compile my_fastapi_app/app/settings.py
+
+# 2. Check imports work
+python3 -c "from tools.stellar_tools import mint_mock_brz, swap_brz_to_usdc, ensure_account_exists, establish_trustline; print('✓ stellar_tools imports OK')"
+
+# 3. Test account creation
+python3 -c "
+from stellar_sdk import Keypair
+from tools.stellar_tools import ensure_account_exists, establish_trustline, MOCK_BRZ_ASSET, USDC_ASSET
+
+# Generate test keypair
+kp = Keypair.random()
+print(f'Test account: {kp.public_key}')
+
+# Fund account
+if ensure_account_exists(kp.public_key):
+    print('✓ Account created')
+    
+    # Establish trustlines
+    establish_trustline(kp, MOCK_BRZ_ASSET)
+    establish_trustline(kp, USDC_ASSET)
+    print('✓ Trustlines established')
+"
+
+# 4. Test minting (requires STELLAR_MOCK_BRZ_ISSUER in .env)
+python3 -c "
+from tools.stellar_tools import mint_mock_brz
+tx_hash = mint_mock_brz('GUSER_PUBLIC_KEY_HERE', 100.0)
+if tx_hash:
+    print(f'✓ Minted: https://stellar.expert/explorer/testnet/tx/{tx_hash}')
+"
+
+# 5. Test swap (requires STELLAR_SECRET_KEY in .env)
+python3 -c "
+from tools.stellar_tools import swap_brz_to_usdc
+result = swap_brz_to_usdc('GUSER_PUBLIC_KEY_HERE', 100.0, 5.5)
+if result:
+    print(f'✓ Swapped: {result}')
+"
+```
+
+**Expected results:**
+- ✅ All imports succeed
+- ✅ Friendbot creates and funds account
+- ✅ Trustlines established for BRZ and USDC
+- ✅ Minting sends Mock-BRZ tokens to user
+- ✅ Swap sends USDC tokens to user
+
+#### Step 2.3 Status: ✅ CODE COMPLETE - AWAITING USER VERIFICATION
+
+**Files created/modified:**
+1. ✅ `src/server/tools/stellar_tools.py` (NEW - 288 lines)
+2. ✅ `src/server/my_fastapi_app/app/settings.py` (added STELLAR_MOCK_BRZ_ISSUER)
+
+**What was achieved:**
+- ✅ Complete Stellar testnet integration with 4 core functions
+- ✅ Mock-BRZ minting from issuer account
+- ✅ BRZ → USDC swap functionality (sandbox version)
+- ✅ Account creation via Friendbot
+- ✅ Trustline establishment for custom assets
+- ✅ Full documentation with usage examples
+
+**Next step:** Step 2.4 - Circle Sandbox Integration
+
+---
+
