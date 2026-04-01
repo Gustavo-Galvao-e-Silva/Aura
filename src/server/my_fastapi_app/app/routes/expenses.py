@@ -214,12 +214,15 @@ async def post_create_expense(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Convert due_date string to date object for database
+    due_date_obj = date.fromisoformat(data.due_date) if isinstance(data.due_date, str) else data.due_date
+
     new_liability = Liability(
         username=data.username,
         name=data.name,
         amount=data.amount,
         currency=data.currency,
-        due_date=data.due_date,
+        due_date=due_date_obj,
         category=data.category,
         is_predicted=False,
         is_paid=False,
@@ -263,11 +266,14 @@ async def update_expense(
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
+    # Convert due_date string to date object for database
+    due_date_obj = date.fromisoformat(data.due_date) if isinstance(data.due_date, str) else data.due_date
+
     expense.username = data.username
     expense.name = data.name
     expense.amount = data.amount
     expense.currency = data.currency
-    expense.due_date = data.due_date
+    expense.due_date = due_date_obj
     expense.category = data.category
     expense.is_paid = data.is_paid
 

@@ -621,3 +621,101 @@ python3 -m mypy agents/trust.py
 **Awaiting user instruction:** Should we proceed with Phase 2 Step 2.3 (Stellar Testnet Tools)?
 
 ---
+
+## 🐛 Bugfix: Date Type Conversion in Expenses API
+
+**Issue Reported:** 2026-04-01
+**Error:** `asyncpg.exceptions.DataError: invalid input for query argument $5: '2026-04-02' ('str' object has no attribute 'toordinal')`
+
+**Root Cause:**
+- Frontend sends `due_date` as string (e.g., `"2026-04-02"`)
+- Database `Liability` model expects Python `date` object
+- `/expenses/create` and `/expenses/{expense_id}` were passing string directly to database
+
+**Fix Applied:**
+
+**Modified:** `src/server/my_fastapi_app/app/routes/expenses.py`
+
+**1. Fixed `/expenses/create` endpoint (line 219)**
+```python
+# Before:
+new_liability = Liability(
+    username=data.username,
+    name=data.name,
+    amount=data.amount,
+    currency=data.currency,
+    due_date=data.due_date,  # ← String passed directly (ERROR)
+    category=data.category,
+    is_predicted=False,
+    is_paid=False,
+)
+
+# After:
+# Convert due_date string to date object for database
+due_date_obj = date.fromisoformat(data.due_date) if isinstance(data.due_date, str) else data.due_date
+
+new_liability = Liability(
+    username=data.username,
+    name=data.name,
+    amount=data.amount,
+    currency=data.currency,
+    due_date=due_date_obj,  # ← Now properly converted
+    category=data.category,
+    is_predicted=False,
+    is_paid=False,
+)
+```
+
+**2. Fixed `/expenses/{expense_id}` PUT endpoint (line 268)**
+```python
+# Before:
+expense.username = data.username
+expense.name = data.name
+expense.amount = data.amount
+expense.currency = data.currency
+expense.due_date = data.due_date  # ← String passed directly (ERROR)
+expense.category = data.category
+expense.is_paid = data.is_paid
+
+# After:
+# Convert due_date string to date object for database
+due_date_obj = date.fromisoformat(data.due_date) if isinstance(data.due_date, str) else data.due_date
+
+expense.username = data.username
+expense.name = data.name
+expense.amount = data.amount
+expense.currency = data.currency
+expense.due_date = due_date_obj  # ← Now properly converted
+expense.category = data.category
+expense.is_paid = data.is_paid
+```
+
+**Why This Pattern:**
+- `date.fromisoformat()` parses ISO 8601 date strings (e.g., "2026-04-02")
+- Safe guard with `isinstance()` check handles edge cases
+- Matches existing pattern in `/upload-invoice` endpoint (lines 74-76)
+
+**Testing:**
+```bash
+# Test creating an expense
+curl -X POST http://localhost:8000/expenses/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "name": "Test Expense",
+    "amount": 100.0,
+    "currency": "USD",
+    "due_date": "2026-04-15",
+    "category": "Education"
+  }'
+```
+
+**Expected:** Success response with created expense
+
+**Status:** ✅ FIXED
+
+---
+
+**Awaiting user instruction:** Should we proceed with Phase 2 Step 2.3 (Stellar Testnet Tools)?
+
+---
