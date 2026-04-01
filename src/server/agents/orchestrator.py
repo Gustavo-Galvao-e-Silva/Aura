@@ -158,7 +158,7 @@ Also provide:
             gemini_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 
             response = gemini_client.models.generate_content(
-                model="gemini-2.0-flash-exp",
+                model="gemini-3.1-flash-lite-preview",
                 contents=[prompt],
                 config=genai.types.GenerateContentConfig(
                     response_mime_type="application/json",
