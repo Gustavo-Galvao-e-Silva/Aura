@@ -94,6 +94,7 @@ class Settings(BaseSettings):
     # Stellar Blockchain Settings
     # ============================================================================
 
+    STELLAR_MOCK_BRZ_ISSUER: str  # Revellio's testnet public key for issuing Mock-BRZ (starts with 'G')
     STELLAR_TRANSACTION_TIMEOUT: int = 30  # Timeout in seconds for Stellar transactions
     STELLAR_BASE_FEE: int = 100  # Base fee for Stellar transactions
     STELLAR_EXPLORER_BASE_URL: str = "https://stellar.expert/explorer/testnet/tx"
