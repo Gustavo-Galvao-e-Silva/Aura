@@ -566,7 +566,8 @@ Be analytical, not speculative. Weight hard data (rates, yields) more heavily th
                 "confidence": confidence,
                 "thesis": analysis.get("thesis", "No thesis generated."),
                 "metrics": analysis.get("metrics", {}),
-                "risk_flags": analysis.get("risk_flags", [])
+                "risk_flags": analysis.get("risk_flags", []),
+                "fetched_at": datetime.now().isoformat()  # Phase 1 Step 1.2: Timestamp provenance
             }
 
             print(f"🧠 Market Synthesis Complete:")
@@ -621,7 +622,8 @@ Be analytical, not speculative. Weight hard data (rates, yields) more heavily th
             "commodity_sentiment": commodity_sent,
             "fiscal_health_score": fiscal_score
         },
-        "risk_flags": risk_flags
+        "risk_flags": risk_flags,
+        "fetched_at": datetime.now().isoformat()  # Phase 1 Step 1.2: Timestamp provenance
     }
 
     print(f"🧠 Fallback Analysis: {prediction} (confidence: {confidence:.0%})")
