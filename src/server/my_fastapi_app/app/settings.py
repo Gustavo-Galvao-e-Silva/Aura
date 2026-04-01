@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     FRED_API_KEY: str
     TAVILY_API_KEY: str
     STELLAR_SECRET_KEY: str
-    STRIPE_SECRET_KEY: Optional[str] = None  # Stripe payments secret key
-    WISE_API_KEY: Optional[str] = None  # Optional: Wise payments
+    STRIPE_SECRET_KEY: Optional[str] = None       # Stripe payments secret key (sk_test_...)
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None   # Stripe webhook signing secret (whsec_...)
+    WISE_API_KEY: Optional[str] = None            # Optional: Wise payments
 
     # ============================================================================
     # Database Configuration
