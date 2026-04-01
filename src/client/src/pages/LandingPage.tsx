@@ -8,14 +8,14 @@ import {
 
 // ─── Color tokens ─────────────────────────────────────────────────────────────
 const C = {
-  maroon:  "#452829",
-  gray:    "#57595B",
-  rose:    "#E8D1C5",
-  cream:   "#F3E8DF",
-  cardBg:  "rgba(87,89,91,0.18)",
-  border:  "rgba(232,209,197,0.12)",
-  borderHover: "rgba(232,209,197,0.28)",
-  muted:   "rgba(243,232,223,0.5)",
+  maroon:  "#2C3930",
+  gray:    "#3F4F44",
+  rose:    "#A27B5C",
+  cream:   "#DCD7C9",
+  cardBg:  "rgba(63,79,68,0.2)",
+  border:  "rgba(162,123,92,0.14)",
+  borderHover: "rgba(162,123,92,0.3)",
+  muted:   "rgba(220,215,201,0.5)",
 };
 
 // ─── Aurora (actual ReactBits component — WebGL via OGL) ─────────────────────
@@ -129,7 +129,7 @@ interface AuroraProps {
   speed?: number;
 }
 
-function Aurora({ colorStops = ["#C4956A", "#F3E8DF", "#E8D1C5"], amplitude = 1.0, blend = 0.5, speed = 1.0 }: AuroraProps) {
+function Aurora({ colorStops = ["#3F4F44", "#A27B5C", "#DCD7C9"], amplitude = 1.0, blend = 0.5, speed = 1.0 }: AuroraProps) {
   const propsRef = useRef<AuroraProps>({ colorStops, amplitude, blend, speed });
   propsRef.current = { colorStops, amplitude, blend, speed };
   const ctnDom = useRef<HTMLDivElement>(null);
@@ -298,7 +298,7 @@ function SpotlightCard({
   children,
   className = "",
   style,
-  spotlightColor = "rgba(232,209,197,0.14)",
+  spotlightColor = "rgba(162,123,92,0.14)",
 }: {
   children: React.ReactNode;
   className?: string;
@@ -459,7 +459,7 @@ export default function LandingPage() {
           content: '';
           position: absolute;
           inset: 0;
-          background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--spotlight-color, rgba(232,209,197,0.14)), transparent 40%);
+          background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--spotlight-color, rgba(162,123,92,0.14)), transparent 40%);
           opacity: 0;
           transition: opacity 0.35s;
           pointer-events: none;
@@ -477,7 +477,7 @@ export default function LandingPage() {
           {/* Logo */}
           <button onClick={() => scrollTo("home")} className="flex items-center gap-2.5 shrink-0">
             <img src="/logo.png" className="h-8 w-auto" alt="" />
-            <span className="text-lg font-extrabold tracking-tight text-[#F3E8DF]">Revellio</span>
+            <span className="text-lg font-extrabold tracking-tight text-[#DCD7C9]">Revellio</span>
           </button>
 
           {/* Desktop nav */}
@@ -486,7 +486,7 @@ export default function LandingPage() {
               <button
                 key={id}
                 onClick={() => scrollTo(id)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-[#F3E8DF]/55 transition-colors hover:bg-[#E8D1C5]/8 hover:text-[#F3E8DF]"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-[#DCD7C9]/55 transition-colors hover:bg-[#A27B5C]/8 hover:text-[#DCD7C9]"
               >
                 {label}
               </button>
@@ -496,14 +496,14 @@ export default function LandingPage() {
 
             <a
               href="/login"
-              className="rounded-lg px-4 py-2 text-sm font-semibold text-[#E8D1C5] transition-colors hover:text-[#F3E8DF]"
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-[#A27B5C] transition-colors hover:text-[#DCD7C9]"
             >
               Log In
             </a>
 
             <a
               href="/login"
-              className="ml-1 inline-flex items-center rounded-xl bg-[#E8D1C5] px-5 py-2 text-sm font-bold text-[#452829] transition-colors hover:bg-[#F3E8DF]"
+              className="ml-1 inline-flex items-center rounded-xl bg-[#A27B5C] px-5 py-2 text-sm font-bold text-[#2C3930] transition-colors hover:bg-[#DCD7C9]"
             >
               Get Started
             </a>
@@ -511,7 +511,7 @@ export default function LandingPage() {
 
           {/* Mobile hamburger */}
           <button
-            className="inline-flex items-center justify-center rounded-lg p-2 text-[#E8D1C5] transition-colors hover:bg-[#E8D1C5]/10 md:hidden"
+            className="inline-flex items-center justify-center rounded-lg p-2 text-[#A27B5C] transition-colors hover:bg-[#A27B5C]/10 md:hidden"
             onClick={() => setMenuOpen(v => !v)}
             aria-label="Toggle menu"
           >
@@ -533,10 +533,10 @@ export default function LandingPage() {
               style={{ borderTop: `1px solid ${C.border}` }}
             >
               <div className="flex flex-col gap-1 px-4 py-3">
-                <button onClick={() => { scrollTo("features"); setMenuOpen(false); }} className="rounded-lg px-4 py-2.5 text-left text-sm text-[#E8D1C5]/70 hover:text-[#E8D1C5]">Features</button>
-                <button onClick={() => { scrollTo("solutions"); setMenuOpen(false); }} className="rounded-lg px-4 py-2.5 text-left text-sm text-[#E8D1C5]/70 hover:text-[#E8D1C5]">Solutions</button>
-                <a href="/login" className="rounded-lg px-4 py-2.5 text-sm font-semibold text-[#F3E8DF]">Log In</a>
-                <a href="/login" className="mt-1 rounded-xl bg-[#E8D1C5] px-4 py-2.5 text-center text-sm font-bold text-[#452829]">Get Started</a>
+                <button onClick={() => { scrollTo("features"); setMenuOpen(false); }} className="rounded-lg px-4 py-2.5 text-left text-sm text-[#A27B5C]/70 hover:text-[#A27B5C]">Features</button>
+                <button onClick={() => { scrollTo("solutions"); setMenuOpen(false); }} className="rounded-lg px-4 py-2.5 text-left text-sm text-[#A27B5C]/70 hover:text-[#A27B5C]">Solutions</button>
+                <a href="/login" className="rounded-lg px-4 py-2.5 text-sm font-semibold text-[#DCD7C9]">Log In</a>
+                <a href="/login" className="mt-1 rounded-xl bg-[#A27B5C] px-4 py-2.5 text-center text-sm font-bold text-[#2C3930]">Get Started</a>
               </div>
             </motion.div>
           )}
@@ -548,7 +548,7 @@ export default function LandingPage() {
         {/* Aurora WebGL background — dark palette so cream text stays readable */}
         <div className="absolute inset-0 pointer-events-none">
           <Aurora
-            colorStops={["#57595B", "#7B3B2A", "#3D1F1F"]}
+            colorStops={["#3F4F44", "#2C3930", "#1a2620"]}
             amplitude={1.1}
             blend={0.5}
             speed={0.7}
@@ -560,7 +560,7 @@ export default function LandingPage() {
           className="pointer-events-none absolute inset-0 opacity-[0.03]"
           style={{
             backgroundImage:
-              "linear-gradient(rgba(243,232,223,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(243,232,223,0.8) 1px, transparent 1px)",
+              "linear-gradient(rgba(220,215,201,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(220,215,201,0.8) 1px, transparent 1px)",
             backgroundSize: "60px 60px",
           }}
         />
@@ -639,7 +639,7 @@ export default function LandingPage() {
               <Magnet padding={60} magnetStrength={3}>
                 <a
                   href="/login"
-                  className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-[#E8D1C5] px-9 py-4 text-base font-bold text-[#452829] shadow-[0_0_40px_#E8D1C544] transition-all hover:bg-[#F3E8DF] hover:shadow-[0_0_60px_#F3E8DF55]"
+                  className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-[#A27B5C] px-9 py-4 text-base font-bold text-[#2C3930] shadow-[0_0_40px_#A27B5C44] transition-all hover:bg-[#DCD7C9] hover:shadow-[0_0_60px_#DCD7C955]"
                 >
                   <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                   <span className="relative flex items-center gap-2">Start for free <ArrowRight size={16} /></span>
@@ -648,7 +648,7 @@ export default function LandingPage() {
               <Magnet padding={60} magnetStrength={3}>
                 <a
                   href="#features"
-                  className="inline-flex items-center rounded-xl border border-[#E8D1C5]/25 px-9 py-4 text-base font-semibold text-[#E8D1C5] backdrop-blur-sm transition-all hover:border-[#E8D1C5]/60 hover:text-[#F3E8DF]"
+                  className="inline-flex items-center rounded-xl border border-[#A27B5C]/25 px-9 py-4 text-base font-semibold text-[#A27B5C] backdrop-blur-sm transition-all hover:border-[#A27B5C]/60 hover:text-[#DCD7C9]"
                 >
                   See features
                 </a>
@@ -844,7 +844,7 @@ export default function LandingPage() {
             <div
               className="relative overflow-hidden rounded-3xl p-12 text-center lg:p-20"
               style={{
-                background: `linear-gradient(135deg, #3a1e1e 0%, #2e1a1a 100%)`,
+                background: `linear-gradient(135deg, #253229 0%, #1c2b22 100%)`,
                 border: `1px solid ${C.rose}30`,
                 boxShadow: `0 0 80px ${C.rose}18`,
               }}
@@ -873,7 +873,7 @@ export default function LandingPage() {
                 <Magnet padding={80} magnetStrength={3}>
                   <a
                     href="/login"
-                    className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-[#E8D1C5] px-10 py-4 text-base font-bold text-[#452829] shadow-[0_0_50px_#E8D1C540] transition-all hover:bg-[#F3E8DF] hover:shadow-[0_0_70px_#F3E8DF50]"
+                    className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-[#A27B5C] px-10 py-4 text-base font-bold text-[#2C3930] shadow-[0_0_50px_#A27B5C40] transition-all hover:bg-[#DCD7C9] hover:shadow-[0_0_70px_#DCD7C950]"
                   >
                     <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                     <span className="relative flex items-center gap-2">Start for free <ArrowRight size={16} /></span>

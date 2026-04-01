@@ -1,38 +1,36 @@
 import { ClockFading, Home, Route, ScrollText, Wallet } from "lucide-react";
 import MenuButton from "./MenuButton";
 
+export default function Navbar() {
+  return (
+    <aside
+      className="hidden w-60 shrink-0 flex-col md:flex"
+      style={{
+        background: "#253229",
+        borderRight: "1px solid rgba(162,123,92,0.1)",
+      }}
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-5 py-5">
+        <img src="/logo.png" className="h-9 w-auto" alt="" />
+        <div>
+          <h1 className="text-base font-extrabold leading-tight tracking-tight text-[#DCD7C9]">
+            Revellio
+          </h1>
+          <p className="text-[11px]" style={{ color: "rgba(220,215,201,0.45)" }}>
+            Student Finance
+          </p>
+        </div>
+      </div>
 
-
-export default function Navbar(){
-    return (
-        <aside className="w-64 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 md:flex hidden">
-            <div className="flex items-center gap-3 p-6">
-                <div className="p-1.5  rounded-lg text-white">
-                  <span className="material-symbols-outlined block">
-                    <img className="w-[70px] h-[60px]" src="logo.png"/> 
-                  </span>
-                </div>
-                <div>
-                <h1 className="text-lg font-bold leading-tight tracking-tight">
-                    Revellio
-                </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Student Finance
-                </p>
-                </div>
-            </div>
-
-            <nav className="flex-1 space-y-1 px-4 py-4">
-             
-                <MenuButton redirect_link="/dashboard" Name="Dashboard" Icon={<Home size={25}/>}/>
-                <MenuButton redirect_link="/expenses" Name="Expenses" Icon={<ScrollText/>}/>
-                <MenuButton redirect_link="/routes" Name="FX Routes" Icon={<Route/>}/>
-                <MenuButton redirect_link="/scheduler" Name="Bill Scheduler" Icon={<ClockFading/>}/>
-                <MenuButton redirect_link="/wallet" Name="Wallet" Icon={<Wallet/>}/>
-              
-
-            </nav>
-            
-            </aside>
-    )
+      {/* Nav */}
+      <nav className="flex-1 space-y-0.5 px-3 py-2">
+        <MenuButton redirect_link="/dashboard"  Name="Dashboard"      Icon={<Home size={18} />} />
+        <MenuButton redirect_link="/expenses"   Name="Expenses"       Icon={<ScrollText size={18} />} />
+        <MenuButton redirect_link="/routes"     Name="FX Routes"      Icon={<Route size={18} />} />
+        <MenuButton redirect_link="/scheduler"  Name="Bill Scheduler" Icon={<ClockFading size={18} />} />
+        <MenuButton redirect_link="/wallet"     Name="Wallet"         Icon={<Wallet size={18} />} />
+      </nav>
+    </aside>
+  );
 }
