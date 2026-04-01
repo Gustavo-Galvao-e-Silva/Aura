@@ -94,7 +94,7 @@ export default function TransferRoutesPage() {
       try {
         setLoadingRates(true);
 
-        const response = await apiClient.get("/get-fx-provider-rates");
+        const response = await apiClient.get("/fx/rates");
 
         setRates({
           crebit:
@@ -130,9 +130,8 @@ export default function TransferRoutesPage() {
       try {
         setLoadingBills(true);
 
-        const response = await apiClient.get("/get-user-expenses", {
+        const response = await apiClient.get(`/expenses/user/${user?.username}`, {
           params: {
-            username: user?.username,
             filter_by: "all",
           },
         });

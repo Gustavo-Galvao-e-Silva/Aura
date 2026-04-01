@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Users
@@ -28,6 +29,11 @@ async def post_create_user(
 
     Returns the created user details.
     """
+    result = await db.execute(select(Users).where(Users.username == data.username))
+    existing = result.scalar_one_or_none()
+    if existing:
+        return existing
+
     new_user = Users(
         fullname=data.fullName,
         username=data.username,

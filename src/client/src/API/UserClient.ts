@@ -7,6 +7,6 @@ export type CreateUserPayload = {
 };
 
 export default async function createUser(payload: CreateUserPayload) {
-  const response = await apiClient.post("/post-create-user", payload);
+  const response = await apiClient.post("/users/create", payload);
   return response.data;
 }

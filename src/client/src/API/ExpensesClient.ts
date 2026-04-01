@@ -33,7 +33,7 @@ export async function uploadInvoice(file: File, username: string) {
   formData.append("file", file);
 
   const response = await axios.post(
-    "http://localhost:8000/upload-invoice",
+    "http://localhost:8000/expenses/upload-invoice",
     formData
   );
 
@@ -41,7 +41,7 @@ export async function uploadInvoice(file: File, username: string) {
 }
 
 export async function getExpenseStats(username?: string) {
-  const response = await apiClient.get("/get-expense-stats", {
+  const response = await apiClient.get("/expenses/stats", {
     params: username ? { username } : {},
   });
 
@@ -49,7 +49,7 @@ export async function getExpenseStats(username?: string) {
 }
 
 export async function createExpense(payload: CreateExpensePayload) {
-  const response = await apiClient.post("/create-expense", payload);
+  const response = await apiClient.post("/expenses/create", payload);
   return response.data;
 }
 
@@ -57,6 +57,6 @@ export async function updateExpense(
   expenseId: number,
   payload: UpdateExpensePayload
 ) {
-  const response = await apiClient.put(`/update-expense/${expenseId}`, payload);
+  const response = await apiClient.put(`/expenses/${expenseId}`, payload);
   return response.data;
 }
