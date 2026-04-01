@@ -952,3 +952,233 @@ if result:
 
 ---
 
+
+### Step 2.4: Circle Sandbox Integration
+
+**Goal:** Implement USDC → USD fiat off-ramp via Circle Sandbox API
+
+**Estimated Time:** 1 hour
+**Started:** 2026-04-01
+
+#### Pre-Implementation Analysis
+
+**What We Need to Build:**
+
+**File to create:** `src/server/tools/circle_tools.py`
+
+**Functions required:**
+1. `initiate_usdc_withdrawal()` - async function to start Circle wire transfer
+2. `check_transfer_status()` - async function to poll transfer status
+3. `get_transfer_details()` - async function to fetch full transfer info
+
+**Circle Sandbox Requirements:**
+- Circle API Key from https://developers.circle.com
+- USDC custody wallet address (Ethereum-based)
+- HTTP client with async support (httpx)
+- Idempotency keys for safe retries
+
+**Settings needed:**
+- `CIRCLE_API_KEY` - Circle Sandbox API authentication
+- `CIRCLE_USDC_HOT_WALLET` - Revellio's USDC custody wallet (Ethereum address)
+
+#### Implementation
+
+**Modified:** `src/server/tools/circle_tools.py` (NEW FILE - 244 lines)
+
+**Functions Implemented:**
+
+**1. `initiate_usdc_withdrawal(amount_usd, recipient_bank_account, user_metadata) -> Optional[Dict]`**
+
+Initiates USDC → USD wire transfer via Circle Sandbox API.
+
+**Parameters:**
+- `amount_usd`: Amount in USD to transfer
+- `recipient_bank_account`: Dict with bank details (account_number, routing_number, bank_name, account_holder_name)
+- `user_metadata`: Dict with user context (username, email, liability_id)
+
+**Returns:**
+```python
+{
+    "transfer_id": "circle_transfer_id_abc123",
+    "status": "pending",
+    "amount_usd": 1000.0,
+    "estimated_arrival": "2026-04-05",
+    "fee_usd": 0.0
+}
+```
+
+**API Request Structure:**
+```python
+POST https://api-sandbox.circle.com/v1/transfers
+Headers:
+  Authorization: Bearer {CIRCLE_API_KEY}
+  Content-Type: application/json
+  X-Idempotency-Key: {uuid}
+
+Body:
+{
+  "source": {
+    "type": "blockchain",
+    "chain": "ETH",
+    "address": "<CIRCLE_USDC_HOT_WALLET>"
+  },
+  "destination": {
+    "type": "wire",
+    "accountNumber": "1234567890",
+    "routingNumber": "021000021",
+    "bankName": "University Bank",
+    "beneficiaryName": "University of South Florida"
+  },
+  "amount": {
+    "amount": "1000.00",
+    "currency": "USD"
+  },
+  "metadata": {
+    "username": "cbahlis",
+    "email": "student@usf.edu",
+    "liability_id": "42",
+    "platform": "Revellio"
+  }
+}
+```
+
+**2. `check_transfer_status(transfer_id) -> Optional[str]`**
+
+Polls Circle API to check transfer status.
+
+**Returns:** Status string: `"pending"` | `"complete"` | `"failed"` | `None` (on error)
+
+**3. `get_transfer_details(transfer_id) -> Optional[Dict]`**
+
+Fetches complete transfer information including metadata and status history.
+
+**Key Features:**
+- ✅ Async implementation using httpx
+- ✅ Idempotency key support (UUID v4)
+- ✅ Comprehensive error handling
+- ✅ Detailed logging with print statements
+- ✅ Sandbox-safe (no real money)
+- ✅ Complete docstrings with examples
+
+**Modified:** `src/server/my_fastapi_app/app/settings.py`
+
+**Changes:** Added Circle API settings (lines 38-39)
+
+```python
+# Before:
+STRIPE_SECRET_KEY: Optional[str] = None       # Stripe payments secret key (sk_test_...)
+STRIPE_WEBHOOK_SECRET: Optional[str] = None   # Stripe webhook signing secret (whsec_...)
+WISE_API_KEY: Optional[str] = None            # Optional: Wise payments
+
+# After:
+STRIPE_SECRET_KEY: Optional[str] = None       # Stripe payments secret key (sk_test_...)
+STRIPE_WEBHOOK_SECRET: Optional[str] = None   # Stripe webhook signing secret (whsec_...)
+WISE_API_KEY: Optional[str] = None            # Optional: Wise payments
+CIRCLE_API_KEY: Optional[str] = None          # Circle Sandbox API key
+CIRCLE_USDC_HOT_WALLET: Optional[str] = None  # Circle USDC custody wallet address (Ethereum)
+```
+
+#### Configuration Required
+
+**Add to `.env`:**
+
+```bash
+# Circle Sandbox API credentials
+CIRCLE_API_KEY=your_circle_sandbox_api_key_here
+CIRCLE_USDC_HOT_WALLET=0x...  # Your Ethereum address holding USDC
+```
+
+**How to get Circle API credentials:**
+
+1. **Sign up for Circle Sandbox**: https://developers.circle.com/
+2. **Create a Sandbox account**: No KYB required for testing
+3. **Generate API Key**: Dashboard → API Keys → Create New Key
+4. **Fund USDC wallet**: Circle provides test USDC for sandbox
+
+**Note:** Circle Sandbox is optional for Phase 2 testing. The settlement flow can work with just Stellar testnet tools.
+
+#### Testing
+
+**Manual verification commands:**
+
+```bash
+cd src/server
+
+# 1. Verify imports
+python3 -c "from tools.circle_tools import initiate_usdc_withdrawal, check_transfer_status, get_transfer_details; print('✓ circle_tools imports OK')"
+
+# 2. Test withdrawal (requires CIRCLE_API_KEY in .env)
+python3 -c "
+import asyncio
+from tools.circle_tools import initiate_usdc_withdrawal
+
+async def test():
+    result = await initiate_usdc_withdrawal(
+        amount_usd=100.0,
+        recipient_bank_account={
+            'account_number': '1234567890',
+            'routing_number': '021000021',
+            'bank_name': 'Test University Bank',
+            'account_holder_name': 'Test Student'
+        },
+        user_metadata={
+            'username': 'testuser',
+            'email': 'test@example.com',
+            'liability_id': '1'
+        }
+    )
+    if result:
+        print(f'✓ Transfer initiated: {result}')
+        return result['transfer_id']
+    else:
+        print('✗ Transfer failed (API key may be missing)')
+
+asyncio.run(test())
+"
+
+# 3. Check transfer status
+python3 -c "
+import asyncio
+from tools.circle_tools import check_transfer_status
+
+async def test():
+    status = await check_transfer_status('TRANSFER_ID_HERE')
+    print(f'Status: {status}')
+
+asyncio.run(test())
+"
+```
+
+**Expected results:**
+- ✅ Imports succeed
+- ⚠️ Transfer initiation may fail without valid Circle API key (optional for testing)
+- ⚠️ Circle Sandbox requires signup and API key generation
+
+**Note on Circle Sandbox:**
+
+Circle Sandbox is **optional** for Phase 2 completion. The core stablecoin flow works with:
+- ✅ Stellar testnet (Mock-BRZ minting + USDC swaps)
+- ✅ Stripe test mode (deposits)
+- ✅ Database ledger (balance tracking)
+
+Circle integration can be added later when production-ready.
+
+#### Step 2.4 Status: ✅ CODE COMPLETE - CIRCLE SANDBOX OPTIONAL
+
+**Files created/modified:**
+1. ✅ `src/server/tools/circle_tools.py` (NEW - 244 lines)
+2. ✅ `src/server/my_fastapi_app/app/settings.py` (added CIRCLE_API_KEY, CIRCLE_USDC_HOT_WALLET)
+
+**What was achieved:**
+- ✅ Complete Circle Sandbox API integration
+- ✅ USDC → USD wire transfer initiation
+- ✅ Transfer status polling
+- ✅ Transfer details retrieval
+- ✅ Async/await support with httpx
+- ✅ Idempotency protection
+- ✅ Full error handling and logging
+
+**Next step:** Step 2.5 - Settlement Flow + Email Notifications
+
+---
+
