@@ -403,3 +403,221 @@ asyncio.run(test())
 **Next step:** Step 1.4 - Update Trust Engine Audit Hash
 
 ---
+
+### Step 1.4: Update Trust Engine Audit Hash
+
+**Goal:** Include `fetched_at` timestamp in the decision payload that gets hashed
+
+**Estimated Time:** 30 minutes
+**Started:** 2026-04-01
+
+#### Pre-Implementation Analysis
+
+**Current trust.py structure:**
+- Lines 33-42: `decision_payload` dict missing `fetched_at` field ❌
+- Lines 99-107: Embedding generation missing `fetched_at` in market context ❌
+- Audit hash doesn't capture data freshness → can't detect decisions made on stale data
+
+**Issues identified:**
+1. ❌ Blockchain hash (SHA256) doesn't include when market data was collected
+2. ❌ Semantic search can't filter by data freshness
+3. ❌ Can't debug "why did AI make X decision at 10am?" when data was from 8am
+
+**Plan:**
+1. Add `"data_fetched_at": market_analysis.get("fetched_at", None)` to decision_payload
+2. Add `"data_fetched_at"` to market_context in embedding generation
+3. Now audit trail shows both WHAT decision was made and WHEN the data was collected
+
+#### Implementation
+
+**Modified:** `src/server/agents/trust.py`
+
+**Changes made:**
+
+**1. ✅ Added `data_fetched_at` to audit hash payload (line 39)**
+
+```python
+# Before:
+decision_payload = {
+    "market_prediction": market_analysis.get("prediction", state.get("market_prediction")),
+    "market_confidence": market_analysis.get("confidence", 0.0),
+    "market_thesis": market_analysis.get("thesis", ""),
+    "risk_flags": market_analysis.get("risk_flags", []),
+    "market_metrics": market_analysis.get("metrics", {}),
+    "current_fx_rate": state.get("current_fx_rate"),
+    "reasoning": reasoning_text,
+    "payment_decisions": state.get("payment_decisions")
+}
+
+# After:
+decision_payload = {
+    "market_prediction": market_analysis.get("prediction", state.get("market_prediction")),
+    "market_confidence": market_analysis.get("confidence", 0.0),
+    "market_thesis": market_analysis.get("thesis", ""),
+    "risk_flags": market_analysis.get("risk_flags", []),
+    "market_metrics": market_analysis.get("metrics", {}),
+    "data_fetched_at": market_analysis.get("fetched_at", None),  # ← NEW: Phase 1 Step 1.4
+    "current_fx_rate": state.get("current_fx_rate"),
+    "reasoning": reasoning_text,
+    "payment_decisions": state.get("payment_decisions")
+}
+```
+
+**2. ✅ Added `data_fetched_at` to semantic embedding context (line 106)**
+
+```python
+# Before:
+reasoning_embedding = generate_reasoning_embedding(
+    reasoning_text=reasoning_text,
+    market_context={
+        "prediction": decision_payload["market_prediction"],
+        "confidence": decision_payload["market_confidence"],
+        "thesis": decision_payload["market_thesis"],
+        "risk_flags": decision_payload["risk_flags"]
+    }
+)
+
+# After:
+reasoning_embedding = generate_reasoning_embedding(
+    reasoning_text=reasoning_text,
+    market_context={
+        "prediction": decision_payload["market_prediction"],
+        "confidence": decision_payload["market_confidence"],
+        "thesis": decision_payload["market_thesis"],
+        "risk_flags": decision_payload["risk_flags"],
+        "data_fetched_at": decision_payload["data_fetched_at"]  # ← NEW: Phase 1 Step 1.4
+    }
+)
+```
+
+**Benefits:**
+- ✅ **Blockchain Audit:** SHA256 hash now includes when market data was collected
+- ✅ **Temporal Traceability:** Can verify decisions weren't made on stale data
+- ✅ **Semantic Search:** Can query "show me decisions made on data >2 hours old"
+- ✅ **Debugging:** Can trace back when bad decisions happened due to outdated conditions
+- ✅ **Audit Compliance:** Complete provenance chain from data collection → decision → hash
+
+**Example:**
+- Old hash: `sha256({"prediction": "BULLISH", "confidence": 0.8, ...})`
+- New hash: `sha256({"prediction": "BULLISH", "confidence": 0.8, "data_fetched_at": "2026-04-01T14:30:00", ...})`
+- Now if market conditions changed at 14:45 but decision used 14:30 data, we can detect this!
+
+#### Testing
+
+**Manual verification needed:**
+
+```bash
+# 1. Verify syntax
+cd src/server
+python3 -m py_compile agents/trust.py
+
+# 2. Check imports work
+python3 -c "from agents.trust import trust_engine_node; print('✓ Import successful')"
+
+# 3. (Optional) Verify hash changes with different timestamps
+python3 -c "
+import hashlib
+import json
+
+# Same decision, different timestamps → different hashes
+payload1 = {'prediction': 'BULLISH', 'confidence': 0.8, 'data_fetched_at': '2026-04-01T10:00:00'}
+payload2 = {'prediction': 'BULLISH', 'confidence': 0.8, 'data_fetched_at': '2026-04-01T10:01:00'}
+
+hash1 = hashlib.sha256(json.dumps(payload1, sort_keys=True).encode()).hexdigest()
+hash2 = hashlib.sha256(json.dumps(payload2, sort_keys=True).encode()).hexdigest()
+
+print(f'Hash 1: {hash1[:16]}...')
+print(f'Hash 2: {hash2[:16]}...')
+print(f'Hashes differ: {hash1 != hash2}')
+"
+```
+
+**Expected result:** Hashes differ even with same prediction, proving timestamp is included
+
+#### Step 1.4 Status: ✅ CODE COMPLETE - AWAITING USER VERIFICATION
+
+**Files modified:**
+- `src/server/agents/trust.py` (added data_fetched_at to decision_payload and embedding context)
+
+**Changes summary:**
+- Added `data_fetched_at` field to decision_payload (line 39)
+- Added `data_fetched_at` to semantic embedding market_context (line 106)
+- Audit hash now includes timestamp provenance for complete traceability
+
+---
+
+## 🎉 Phase 1 Complete: Agentic Brain Upgrade
+
+**Total Duration:** ~3 hours
+**Status:** ✅ ALL STEPS COMPLETE - AWAITING USER VERIFICATION
+
+### Summary of Changes
+
+**Files Modified:**
+1. ✅ `src/server/agents/state.py` - Added MarketMetrics TypedDict, updated MarketAnalysis with fetched_at
+2. ✅ `src/server/agents/researchers.py` - Added timestamp to market_analysis output (2 locations)
+3. ✅ `src/server/agents/orchestrator.py` - Complete rewrite: 144 lines → 272 lines with LLM reasoning
+4. ✅ `src/server/agents/trust.py` - Added data_fetched_at to audit hash and embeddings
+
+### What Was Achieved
+
+**1. Type Safety (Step 1.1)**
+- Replaced loose `Dict[str, Any]` with strongly-typed `MarketMetrics`
+- Added 14 specific metric fields with proper types
+- IDE autocomplete and mypy validation now available
+
+**2. Timestamp Provenance (Step 1.2)**
+- Added `fetched_at` field to MarketAnalysis
+- Timestamp flows from researchers → synthesis → orchestrator → trust engine
+- Can now track data freshness throughout the pipeline
+
+**3. LLM Orchestration (Step 1.3)**
+- Replaced 45 lines of if/elif rules with Gemini-powered reasoning
+- LLM can understand nuanced market narratives
+- Pydantic schemas ensure structured outputs
+- Graceful fallback to simple rules if LLM fails
+
+**4. Complete Audit Trail (Step 1.4)**
+- Blockchain hash (SHA256) now includes data collection timestamp
+- Semantic search can filter by data freshness
+- Complete provenance from market data → decision → immutable proof
+
+### User Verification Checklist
+
+Please run these commands to verify Phase 1 implementation:
+
+```bash
+cd src/server
+
+# 1. Verify all files compile
+python3 -m py_compile agents/state.py
+python3 -m py_compile agents/researchers.py
+python3 -m py_compile agents/orchestrator.py
+python3 -m py_compile agents/trust.py
+
+# 2. Check imports work
+python3 -c "from agents.state import MarketMetrics, MarketAnalysis; print('✓ state.py imports OK')"
+python3 -c "from agents.researchers import market_synthesis_node; print('✓ researchers.py imports OK')"
+python3 -c "from agents.orchestrator import orchestrator_node, BillDecision, OrchestratorOutput; print('✓ orchestrator.py imports OK')"
+python3 -c "from agents.trust import trust_engine_node; print('✓ trust.py imports OK')"
+
+# 3. (Optional) Type check if mypy installed
+python3 -m mypy agents/state.py
+python3 -m mypy agents/orchestrator.py
+python3 -m mypy agents/trust.py
+```
+
+**Expected result:** All imports succeed with no errors
+
+### Next Steps
+
+**Phase 2: Stablecoin Sandbox** (remaining work)
+- ✅ Step 2.1: Database Schema (done by teammate)
+- ✅ Step 2.2: Stripe Webhooks (done by teammate)
+- ⏸️ Step 2.3: Stellar Testnet Tools - PENDING
+- ⏸️ Step 2.4: Circle Sandbox Integration - PENDING
+- ⏸️ Step 2.5: Settlement Flow + Email Notifications - PENDING
+
+**Awaiting user instruction:** Should we proceed with Phase 2 Step 2.3 (Stellar Testnet Tools)?
+
+---
