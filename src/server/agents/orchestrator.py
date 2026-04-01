@@ -3,21 +3,48 @@ from sqlalchemy import select
 from my_fastapi_app.app.db.session import AsyncSessionLocal
 from db.models import Liability
 from agents.state import AuraState
+from pydantic import BaseModel, Field
+from typing import List
+from google import genai
+from my_fastapi_app.app.settings import settings
+import json
+
+
+# ============================================================================
+# Structured Output Schemas
+# ============================================================================
+
+class BillDecision(BaseModel):
+    """Decision for a single bill."""
+    liability_id: int = Field(description="Database ID of the liability")
+    pay: bool = Field(description="True = pay now, False = wait")
+    reason: str = Field(description="1-2 sentence explanation for this specific bill")
+
+
+class OrchestratorOutput(BaseModel):
+    """Structured output from the orchestrator LLM."""
+    decisions: List[BillDecision] = Field(description="Pay/wait decision for each bill")
+    selected_route_alert: str = Field(
+        description="User-facing summary message (2-3 sentences) explaining the overall recommendation"
+    )
+
+
+# ============================================================================
+# Orchestrator Node (LLM-Powered)
+# ============================================================================
 
 async def orchestrator_node(state: AuraState):
     """
-    Role 4: The Master Orchestrator.
-    Combines Market Intel, Route Facts, and DB Liabilities to make decisions.
-    Determines 'Pay' vs 'Wait' for every liability and returns structured data.
+    Role 4: The Master Orchestrator (LLM-Powered Decision Maker).
 
-    Now enhanced to consume the full MarketAnalysis structure with:
-    - prediction (BULLISH/BEARISH/NEUTRAL)
-    - confidence (0.0 to 1.0)
-    - thesis (the "why")
-    - risk_flags (specific concerns like election_volatility)
+    Combines Market Intel, Route Facts, and DB Liabilities to make intelligent decisions.
+    Uses Gemini with structured outputs to reason about each bill individually.
+
+    This replaces the previous hardcoded if/elif rules with flexible LLM reasoning
+    that can leverage the full nuance of the market thesis.
     """
     async with AsyncSessionLocal() as db:
-        # 1. Fetch ALL unpaid liabilities (both actual and predicted)
+        # 1. Fetch ALL unpaid liabilities
         result = await db.execute(
             select(Liability).filter(Liability.is_paid == False)
         )
@@ -31,77 +58,187 @@ async def orchestrator_node(state: AuraState):
         routes = state.get("route_options", [])
         crebit_route = next((r for r in routes if r["name"] == "Crebit"), None)
 
-        # NEW: Get the structured market analysis
         market_analysis = state.get("market_analysis", {})
         prediction = market_analysis.get("prediction", "NEUTRAL")
         confidence = market_analysis.get("confidence", 0.0)
         thesis = market_analysis.get("thesis", "No market analysis available.")
         risk_flags = market_analysis.get("risk_flags", [])
-
-        # Fallback to legacy field if market_analysis is empty
-        if not prediction or prediction == "NEUTRAL":
-            prediction = state.get("market_prediction", "NEUTRAL")
+        metrics = market_analysis.get("metrics", {})
+        fetched_at = market_analysis.get("fetched_at", "unknown")
 
         print(f"🎖️ Orchestrator: Market = {prediction} (confidence: {confidence:.0%})")
-        print(f"   Risk Flags: {', '.join(risk_flags) if risk_flags else 'None'}")
+        print(f"   Risk Flags: {', '.join(risk_flags[:3]) if risk_flags else 'None'}")
+        print(f"   Data Fetched: {fetched_at}")
 
+        # 3. Prepare bill data for LLM
+        bills_summary = []
+        for bill in unpaid:
+            days_until_due = (bill.due_date - date.today()).days
+
+            cost_estimate_brl = 0.0
+            if crebit_route:
+                fx = crebit_route.get("fx_used", 0.0)
+                fee = crebit_route.get("fee_usd", 0.0)
+                cost_estimate_brl = (bill.amount + fee) * fx
+
+            bills_summary.append({
+                "id": bill.id,
+                "name": bill.name,
+                "amount_usd": bill.amount,
+                "days_until_due": days_until_due,
+                "is_predicted": bill.is_predicted,
+                "cost_estimate_brl": cost_estimate_brl
+            })
+
+        # 4. Build the LLM prompt
+        prompt = f"""You are the Chief Financial Officer for Revellio, making intelligent payment decisions for international students.
+
+# CONTEXT
+
+## Market Analysis (fetched at {fetched_at})
+**Prediction:** {prediction}
+**Confidence:** {confidence:.0%}
+**Thesis:** {thesis}
+**Risk Flags:** {', '.join(risk_flags) if risk_flags else 'None'}
+
+**Key Metrics:**
+- Selic Rate: {metrics.get('selic_rate', 'N/A')}%
+- Fed Funds Rate: {metrics.get('fed_funds_rate', 'N/A')}%
+- Rate Differential: {metrics.get('rate_differential', 'N/A')}pp
+- Commodity Sentiment: {metrics.get('commodity_sentiment', 'N/A')}
+- Fiscal Health: {metrics.get('fiscal_health_score', 'N/A')}/10
+- Political Stability: {metrics.get('political_stability_score', 'N/A')}/10
+
+## Unpaid Bills (USD)
+Total bills to decide: {len(bills_summary)}
+
+{chr(10).join([f"- [{b['id']}] {b['name']}: ${b['amount_usd']:.2f} due in {b['days_until_due']} days (est. R${b['cost_estimate_brl']:.2f})" +
+               (" [PREDICTED]" if b['is_predicted'] else "") for b in bills_summary])}
+
+## Payment Route
+Using **Crebit** with FX rate {crebit_route.get('fx_used', 0.0):.4f} BRL/USD
+
+# YOUR TASK
+
+For EACH bill above, decide: **PAY NOW** or **WAIT**
+
+## Decision Framework:
+
+### PAY NOW if:
+1. **Urgent:** Due in ≤3 days (avoid late penalties)
+2. **Strong BULLISH signal:** High confidence (≥0.7) that BRL is at peak strength → lock in rate now
+3. **Moderate BULLISH + deadline:** Confidence ≥0.5 AND due in ≤10 days → secure current rate
+4. **NEUTRAL + imminent:** Due in ≤5 days → pay to avoid last-minute risk
+
+### WAIT if:
+1. **BEARISH signal:** BRL expected to weaken → better rate coming (unless urgent)
+2. **High-risk flags:** Election volatility, fiscal concerns, yield curve inversion → hold unless urgent
+3. **Low confidence:** Confidence <0.5 AND not due soon → wait for clearer signals
+4. **Predicted bill:** Not yet confirmed → wait unless very urgent
+
+## Important Notes:
+- URGENCY OVERRIDES EVERYTHING: Bills due in ≤3 days should almost always be paid
+- Use the THESIS to understand WHY the market is moving, not just the prediction
+- Consider SPECIFIC risk flags (e.g., "election_volatility" → delay if possible)
+- For predicted bills, be more conservative (higher bar to pay)
+- Market confidence affects your conviction, not the deadline math
+
+## Output Format:
+For each bill, provide:
+1. `liability_id`: The bill ID number
+2. `pay`: true (pay now) or false (wait)
+3. `reason`: 1-2 sentences explaining your decision for THIS SPECIFIC bill (reference the thesis, confidence, and bill deadline)
+
+Also provide:
+- `selected_route_alert`: A 2-3 sentence summary for the user explaining your overall recommendation across all bills
+"""
+
+        # 5. Call Gemini with structured output
+        try:
+            gemini_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+
+            response = gemini_client.models.generate_content(
+                model="gemini-2.0-flash-exp",
+                contents=[prompt],
+                config=genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=OrchestratorOutput
+                )
+            )
+
+            if response and response.text:
+                llm_output = json.loads(response.text)
+
+                # Convert LLM decisions to internal format
+                decisions_list = []
+                for decision in llm_output.get("decisions", []):
+                    # Find the matching bill
+                    bill = next((b for b in unpaid if b.id == decision["liability_id"]), None)
+                    if not bill:
+                        print(f"   ⚠️  LLM returned decision for unknown liability_id {decision['liability_id']}")
+                        continue
+
+                    # Calculate cost details
+                    cost_details = {}
+                    if crebit_route:
+                        fx = crebit_route.get("fx_used", 0.0)
+                        fee = crebit_route.get("fee_usd", 0.0)
+                        cost_details = {
+                            "fx_rate": fx,
+                            "estimated_brl": (bill.amount + fee) * fx
+                        }
+
+                    decisions_list.append({
+                        "liability_id": bill.id,
+                        "name": bill.name,
+                        "amount_usd": bill.amount,
+                        "is_predicted": bill.is_predicted,
+                        "pay": decision["pay"],
+                        "reason": decision["reason"],
+                        "cost_estimate_brl": cost_details.get("estimated_brl", 0.0),
+                        "market_confidence": confidence,
+                        "risk_flags": risk_flags
+                    })
+
+                selected_route = llm_output.get("selected_route_alert", "Aura recommendation generated.")
+
+                print(f"✅ Orchestrator (LLM): Processed {len(decisions_list)} bills")
+                print(f"   Pay Now: {sum(1 for d in decisions_list if d['pay'])}, "
+                      f"Wait: {sum(1 for d in decisions_list if not d['pay'])}")
+
+                return {
+                    "payment_decisions": decisions_list,
+                    "selected_route": selected_route
+                }
+
+        except Exception as e:
+            print(f"   ✗ LLM orchestrator failed: {e}")
+            print(f"   ⚠️  Falling back to simple rule-based logic")
+
+        # 6. Fallback: Simple rule-based logic (if LLM fails)
         decisions_list = []
         top_alert = None
 
         for bill in unpaid:
             days_until_due = (bill.due_date - date.today()).days
 
-            # --- ENHANCED DECISION LOGIC ---
-            pay_now = False
-            reason = "Market conditions are unclear or unfavorable. Waiting for better conditions."
-
-            # Rule 1: URGENT bills (due in ≤3 days) always get paid
+            # Ultra-simple fallback rules
             if days_until_due <= 3:
                 pay_now = True
-                reason = f"URGENT: {bill.name} is due in {max(0, days_until_due)} days. Paying now to avoid penalties."
-
-            # Rule 2: Check for high-risk flags that should block payment
-            elif "fiscal_concerns" in risk_flags and confidence < 0.6:
-                pay_now = False
-                reason = f"Fiscal instability detected with low confidence ({confidence:.0%}). Waiting for clearer signals."
-
-            elif "election_volatility" in risk_flags and days_until_due > 7:
-                pay_now = False
-                reason = "Election volatility detected. Delaying payment to observe market stabilization."
-
-            elif "yield_curve_inversion" in risk_flags:
-                pay_now = False
-                reason = "US yield curve inverted (recession risk). Expect USD strength, waiting for better BRL rates."
-
-            # Rule 3: BULLISH signal with high confidence → PAY
+                reason = f"URGENT: Due in {days_until_due} days, paying to avoid penalties."
             elif prediction == "BULLISH" and confidence >= 0.7:
                 pay_now = True
-                reason = f"Strong BULLISH signal ({confidence:.0%} confidence). BRL is strong—locking in favorable rate now."
-
-            # Rule 4: BULLISH signal with moderate confidence → PAY only if due soon
-            elif prediction == "BULLISH" and 0.5 <= confidence < 0.7:
-                if days_until_due <= 10:
-                    pay_now = True
-                    reason = f"Moderate BULLISH signal ({confidence:.0%}). Due in {days_until_due} days, paying to secure current rate."
-                else:
-                    pay_now = False
-                    reason = f"Moderate BULLISH signal but low confidence ({confidence:.0%}). Waiting for stronger confirmation."
-
-            # Rule 5: BEARISH signal → WAIT (unless urgent)
+                reason = f"Strong BULLISH signal ({confidence:.0%}), locking in favorable rate."
             elif prediction == "BEARISH":
                 pay_now = False
-                reason = f"BEARISH signal: BRL expected to weaken. Waiting for more favorable exchange rate (thesis: {thesis[:80]}...)."
-
-            # Rule 6: NEUTRAL or low confidence → conservative (wait unless due soon)
+                reason = f"BEARISH signal: waiting for better rate. {thesis[:60]}..."
+            elif days_until_due <= 7:
+                pay_now = True
+                reason = f"Due soon ({days_until_due} days), paying to secure current conditions."
             else:
-                if days_until_due <= 5:
-                    pay_now = True
-                    reason = f"Neutral market outlook, but bill due in {days_until_due} days. Paying to avoid last-minute risk."
-                else:
-                    pay_now = False
-                    reason = "Neutral market signal with mixed fundamentals. Monitoring conditions before acting."
+                pay_now = False
+                reason = "Monitoring market conditions before committing."
 
-            # Calculate the specific cost for this bill
             cost_details = {}
             if crebit_route:
                 fx = crebit_route.get("fx_used", 0.0)
@@ -111,7 +248,6 @@ async def orchestrator_node(state: AuraState):
                     "estimated_brl": (bill.amount + fee) * fx
                 }
 
-            # Add to structured JSON
             decisions_list.append({
                 "liability_id": bill.id,
                 "name": bill.name,
@@ -120,22 +256,14 @@ async def orchestrator_node(state: AuraState):
                 "pay": pay_now,
                 "reason": reason,
                 "cost_estimate_brl": cost_details.get("estimated_brl", 0.0),
-                "market_confidence": confidence,  # NEW: Include confidence in decision
-                "risk_flags": risk_flags  # NEW: Include risk context
+                "market_confidence": confidence,
+                "risk_flags": risk_flags
             })
 
-            # Prepare the string for the main selected_route alert (Top priority)
-            # We prioritize actual bills over predicted ones for the top alert message
             if pay_now and not top_alert and not bill.is_predicted:
-                top_alert = (
-                    f"🚀 Aura Recommendation: {reason}\n"
-                    f"Pay {bill.name} (${bill.amount:.2f}) via {crebit_route['name']} "
-                    f"for R${cost_details.get('estimated_brl', 0.0):.2f}.\n"
-                    f"Market Thesis: {thesis[:100]}..."
-                )
+                top_alert = f"🚀 Aura Recommendation: {reason} Pay {bill.name} (${bill.amount:.2f}) via Crebit for R${cost_details.get('estimated_brl', 0.0):.2f}."
 
-        print(f"✅ Orchestrator: Processed {len(decisions_list)} bills")
-        print(f"   Pay Now: {sum(1 for d in decisions_list if d['pay'])}, Wait: {sum(1 for d in decisions_list if not d['pay'])}")
+        print(f"✅ Orchestrator (Fallback): Processed {len(decisions_list)} bills")
 
         return {
             "payment_decisions": decisions_list,
