@@ -10,6 +10,15 @@ type AddExpensesModalProps = {
   CloseModal: () => void;
 };
 
+const C = {
+  bg: "#2C3930",
+  surface: "rgba(63,79,68,0.18)",
+  border: "rgba(162,123,92,0.1)",
+  rose: "#A27B5C",
+  cream: "#DCD7C9",
+  muted: "rgba(220,215,201,0.5)",
+};
+
 export default function AddExpensesModal({
   CloseModal,
 }: AddExpensesModalProps) {
@@ -107,17 +116,32 @@ export default function AddExpensesModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
-        <div className="flex items-center justify-between border-b border-slate-100 p-6 dark:border-slate-800">
-          <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+      style={{ background: "rgba(12, 18, 14, 0.72)" }}
+      onClick={CloseModal}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl shadow-2xl"
+        style={{
+          background: C.bg,
+          border: `1px solid ${C.border}`,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center justify-between p-6"
+          style={{ borderBottom: `1px solid ${C.border}` }}
+        >
+          <h3 className="text-xl font-bold" style={{ color: C.cream }}>
             Add New Expense
           </h3>
 
           <button
             type="button"
             onClick={CloseModal}
-            className="text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200"
+            className="transition-colors"
+            style={{ color: C.muted }}
           >
             <X className="h-5 w-5" />
           </button>
@@ -126,27 +150,43 @@ export default function AddExpensesModal({
         <div className="overflow-y-auto p-8">
           <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
             <div className="flex flex-col">
-              <label className="mb-4 block text-sm font-bold text-slate-700 dark:text-slate-300">
+              <label
+                className="mb-4 block text-sm font-bold"
+                style={{ color: C.cream }}
+              >
                 Upload Receipt/Invoice
               </label>
 
               <label
                 htmlFor="expense-file"
-                className="group flex min-h-[260px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-blue-700/20 bg-blue-700/5 p-8 text-center transition-all hover:border-blue-700/40"
+                className="group flex min-h-[260px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-all"
+                style={{
+                  borderColor: "rgba(162,123,92,0.22)",
+                  background: "rgba(63,79,68,0.18)",
+                }}
               >
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-700/10 text-blue-700 transition-transform group-hover:scale-110">
+                <div
+                  className="mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-transform group-hover:scale-110"
+                  style={{
+                    background: "rgba(162,123,92,0.12)",
+                    color: C.rose,
+                  }}
+                >
                   <Upload className="h-8 w-8" />
                 </div>
 
-                <p className="mb-1 font-bold text-slate-900 dark:text-white">
+                <p className="mb-1 font-bold" style={{ color: C.cream }}>
                   Drop your file here or click to browse
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs" style={{ color: C.muted }}>
                   Supported formats: PDF, JPG, PNG (Max 5MB)
                 </p>
 
                 {selectedFile && (
-                  <p className="mt-3 break-all text-xs font-semibold text-blue-700">
+                  <p
+                    className="mt-3 break-all text-xs font-semibold"
+                    style={{ color: C.rose }}
+                  >
                     {selectedFile.name}
                   </p>
                 )}
@@ -168,7 +208,8 @@ export default function AddExpensesModal({
                   type="button"
                   onClick={handleUploadInvoice}
                   disabled={isUploading}
-                  className="mt-4 rounded-xl bg-blue-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-700/25 transition-all hover:opacity-90 disabled:opacity-60"
+                  className="mt-4 rounded-xl px-6 py-3 text-sm font-bold transition-all disabled:opacity-60"
+                  style={{ background: C.rose, color: C.bg }}
                 >
                   {isUploading ? "Uploading invoice..." : "Upload Invoice"}
                 </button>
@@ -176,18 +217,29 @@ export default function AddExpensesModal({
             </div>
 
             <div className="space-y-4">
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+              <label
+                className="block text-sm font-bold"
+                style={{ color: C.cream }}
+              >
                 Manual Entry
               </label>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500">
+                <label
+                  className="mb-1 block text-xs font-semibold"
+                  style={{ color: C.muted }}
+                >
                   Expense Name
                 </label>
                 <input
                   value={expenseName}
                   onChange={(e) => setExpenseName(e.target.value)}
-                  className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                  className="w-full rounded-xl bg-transparent px-4 py-3 text-sm outline-none"
+                  style={{
+                    border: `1px solid ${C.border}`,
+                    color: C.cream,
+                    caretColor: C.rose,
+                  }}
                   placeholder="e.g. Tuition Fees, Rent"
                   type="text"
                 />
@@ -195,13 +247,21 @@ export default function AddExpensesModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">
+                  <label
+                    className="mb-1 block text-xs font-semibold"
+                    style={{ color: C.muted }}
+                  >
                     Amount
                   </label>
                   <input
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                    className="w-full rounded-xl bg-transparent px-4 py-3 text-sm outline-none"
+                    style={{
+                      border: `1px solid ${C.border}`,
+                      color: C.cream,
+                      caretColor: C.rose,
+                    }}
                     placeholder="0.00"
                     type="number"
                     min="0"
@@ -210,13 +270,21 @@ export default function AddExpensesModal({
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">
+                  <label
+                    className="mb-1 block text-xs font-semibold"
+                    style={{ color: C.muted }}
+                  >
                     Currency
                   </label>
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value as "USD" | "BRL")}
-                    className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                    className="w-full rounded-xl bg-transparent px-4 py-3 text-sm outline-none"
+                    style={{
+                      border: `1px solid ${C.border}`,
+                      color: C.cream,
+                      backgroundColor: C.bg,
+                    }}
                   >
                     <option value="USD">USD ($)</option>
                     <option value="BRL">BRL (R$)</option>
@@ -226,25 +294,41 @@ export default function AddExpensesModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">
+                  <label
+                    className="mb-1 block text-xs font-semibold"
+                    style={{ color: C.muted }}
+                  >
                     Due Date
                   </label>
                   <input
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm text-slate-500 focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                    className="w-full rounded-xl bg-transparent px-4 py-3 text-sm outline-none"
+                    style={{
+                      border: `1px solid ${C.border}`,
+                      color: C.cream,
+                      colorScheme: "dark",
+                    }}
                     type="date"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">
+                  <label
+                    className="mb-1 block text-xs font-semibold"
+                    style={{ color: C.muted }}
+                  >
                     Category
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                    className="w-full rounded-xl bg-transparent px-4 py-3 text-sm outline-none"
+                    style={{
+                      border: `1px solid ${C.border}`,
+                      color: C.cream,
+                      backgroundColor: C.bg,
+                    }}
                   >
                     <option>Education</option>
                     <option>Housing</option>
@@ -257,13 +341,21 @@ export default function AddExpensesModal({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500">
+                <label
+                  className="mb-1 block text-xs font-semibold"
+                  style={{ color: C.muted }}
+                >
                   Notes (Optional)
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="h-24 w-full resize-none rounded-xl border-none bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-700 dark:bg-slate-800"
+                  className="h-24 w-full resize-none rounded-xl bg-transparent px-4 py-3 text-sm outline-none"
+                  style={{
+                    border: `1px solid ${C.border}`,
+                    color: C.cream,
+                    caretColor: C.rose,
+                  }}
                   placeholder="Add any extra details..."
                 />
               </div>
@@ -271,11 +363,18 @@ export default function AddExpensesModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/50 p-6 dark:border-slate-800 dark:bg-slate-800/30">
+        <div
+          className="flex items-center justify-end gap-3 p-6"
+          style={{
+            borderTop: `1px solid ${C.border}`,
+            background: "rgba(63,79,68,0.12)",
+          }}
+        >
           <button
             type="button"
             onClick={CloseModal}
-            className="px-6 py-2.5 text-sm font-bold text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            className="px-6 py-2.5 text-sm font-bold transition-colors"
+            style={{ color: C.muted }}
           >
             Cancel
           </button>
@@ -284,7 +383,8 @@ export default function AddExpensesModal({
             type="button"
             onClick={handleCreateExpense}
             disabled={isCreatingExpense}
-            className="rounded-xl bg-blue-700 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-700/25 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
+            className="rounded-xl px-8 py-2.5 text-sm font-bold transition-all active:scale-95 disabled:opacity-60"
+            style={{ background: C.rose, color: C.bg }}
           >
             {isCreatingExpense ? "Adding..." : "Add Expense"}
           </button>

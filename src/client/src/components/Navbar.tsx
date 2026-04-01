@@ -1,4 +1,11 @@
-import { ClockFading, Home, Route, ScrollText, Wallet } from "lucide-react";
+import {
+  ClockFading,
+  Home,
+  Route,
+  ScrollText,
+  Wallet,
+  ShieldCheck,
+} from "lucide-react";
 import MenuButton from "./MenuButton";
 
 export default function Navbar() {
@@ -17,7 +24,10 @@ export default function Navbar() {
           <h1 className="text-base font-extrabold leading-tight tracking-tight text-[#DCD7C9]">
             Revellio
           </h1>
-          <p className="text-[11px]" style={{ color: "rgba(220,215,201,0.45)" }}>
+          <p
+            className="text-[11px]"
+            style={{ color: "rgba(220,215,201,0.45)" }}
+          >
             Student Finance
           </p>
         </div>
@@ -25,11 +35,36 @@ export default function Navbar() {
 
       {/* Nav */}
       <nav className="flex-1 space-y-0.5 px-3 py-2">
-        <MenuButton redirect_link="/dashboard"  Name="Dashboard"      Icon={<Home size={18} />} />
-        <MenuButton redirect_link="/expenses"   Name="Expenses"       Icon={<ScrollText size={18} />} />
-        <MenuButton redirect_link="/routes"     Name="FX Routes"      Icon={<Route size={18} />} />
-        <MenuButton redirect_link="/scheduler"  Name="Bill Scheduler" Icon={<ClockFading size={18} />} />
-        <MenuButton redirect_link="/wallet"     Name="Wallet"         Icon={<Wallet size={18} />} />
+        <MenuButton
+          redirect_link="/dashboard"
+          Name="Dashboard"
+          Icon={<Home size={18} />}
+        />
+        <MenuButton
+          redirect_link="/expenses"
+          Name="Expenses"
+          Icon={<ScrollText size={18} />}
+        />
+        <MenuButton
+          redirect_link="/routes"
+          Name="FX Routes"
+          Icon={<Route size={18} />}
+        />
+        <MenuButton
+          redirect_link="/scheduler"
+          Name="Bill Scheduler"
+          Icon={<ClockFading size={18} />}
+        />
+        <MenuButton
+          redirect_link="/wallet"
+          Name="Wallet"
+          Icon={<Wallet size={18} />}
+        />
+        <MenuButton
+          redirect_link="/audit"
+          Name="Audit Trail"
+          Icon={<ShieldCheck size={18} />}
+        />
       </nav>
     </aside>
   );
