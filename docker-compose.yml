@@ -1,46 +1,33 @@
+# Revellio Full Stack - Docker Compose (Supabase Configuration)
+#
+# This orchestrates the entire application:
+# - Backend (FastAPI) → connects to Supabase
+# - Frontend (React/Vite)
+#
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop all services
+
+version: '3.8'
+
 services:
-  db:
-    image: pgvector/pgvector:pg16
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-revellio}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
-  adminer:
-    image: adminer
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db
-
+  # Backend: FastAPI + LangGraph Agents
   backend:
     build:
       context: ./src/server
       dockerfile: Dockerfile
+    container_name: revellio-backend
+    restart: unless-stopped
     command: uvicorn my_fastapi_app.app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     env_file:
       - ./src/server/.env
     environment:
-      # Override DATABASE_URL to use Docker service name
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/revellio
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: revellio
+      # Use Supabase connection from .env (no local db override)
+      # DATABASE_URL from .env will be used automatically
       # Force Python unbuffered output for real-time logs in Docker
       PYTHONUNBUFFERED: 1
     volumes:
@@ -50,14 +37,20 @@ services:
       - /app/__pycache__
       - /app/.venv
       - /app/.pytest_cache
-    depends_on:
-      db:
-        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+  # Frontend: React + Vite
   frontend:
     build:
       context: ./src/client
       dockerfile: Dockerfile
+    container_name: revellio-frontend
+    restart: unless-stopped
     command: npm run dev -- --host 0.0.0.0
     ports:
       - "5173:5173"
@@ -71,5 +64,5 @@ services:
     depends_on:
       - backend
 
-volumes:
-  pgdata:
+# No volumes needed - using Supabase (cloud database)
+# If you want to run a local PostgreSQL for offline dev, see docker-compose.local.yml
