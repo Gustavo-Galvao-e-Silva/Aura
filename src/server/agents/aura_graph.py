@@ -4,6 +4,7 @@ from agents.agents import fx_strategist_node  # Legacy fallback, can be removed 
 from agents.router import smart_router_node
 from agents.trust import trust_engine_node
 from agents.orchestrator import orchestrator_node
+from agents.auto_executor import auto_executor_node
 from agents.researchers import (
     macro_researcher_node,
     commodity_researcher_node,
@@ -27,6 +28,8 @@ def build_aura_graph():
                ↓
              orchestrator          (Make pay/wait decisions)
                ↓
+             auto_executor         (Auto-execute high-confidence payments)
+               ↓
              trust_engine          (Hash to Stellar blockchain)
                ↓
              END
@@ -42,9 +45,10 @@ def build_aura_graph():
     # 3. Add the Synthesis Node (Fan-in)
     workflow.add_node("synthesis", market_synthesis_node)
 
-    # 4. Add the Execution Nodes (unchanged from original)
+    # 4. Add the Execution Nodes
     workflow.add_node("smart_router", smart_router_node)
     workflow.add_node("orchestrator", orchestrator_node)
+    workflow.add_node("auto_executor", auto_executor_node)
     workflow.add_node("trust_engine", trust_engine_node)
 
     # 5. Define the Flow
@@ -59,10 +63,11 @@ def build_aura_graph():
     workflow.add_edge("commodity_researcher", "synthesis")
     workflow.add_edge("sentiment_researcher", "synthesis")
 
-    # Linear flow: synthesis -> router -> orchestrator -> trust -> END
+    # Linear flow: synthesis -> router -> orchestrator -> auto_executor -> trust -> END
     workflow.add_edge("synthesis", "smart_router")
     workflow.add_edge("smart_router", "orchestrator")
-    workflow.add_edge("orchestrator", "trust_engine")
+    workflow.add_edge("orchestrator", "auto_executor")
+    workflow.add_edge("auto_executor", "trust_engine")
     workflow.add_edge("trust_engine", END)
 
     # 6. Compile
