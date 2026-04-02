@@ -22,7 +22,7 @@ import {
 } from "../API/PaymentsClient";
 import type { WalletBalance, TransactionItem } from "../API/PaymentsClient";
 
-const PRESET_AMOUNTS = [25, 50, 100, 250, 500];
+const PRESET_AMOUNTS = [50, 100, 250, 500, 1000];
 
 // ─── shared palette ───────────────────────────────────────────────────────────
 const C = {
@@ -72,7 +72,7 @@ export default function WalletPage() {
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
 
-  const [depositAmount, setDepositAmount] = useState("50");
+  const [depositAmount, setDepositAmount] = useState("100");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,7 +100,7 @@ export default function WalletPage() {
 
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount < 1) {
-      setError("Minimum deposit is $1.00");
+      setError("Minimum deposit is R$1.00");
       return;
     }
 
@@ -199,7 +199,7 @@ export default function WalletPage() {
               ) : (
                 <>
                   <p className="text-3xl font-black" style={{ color: C.cream }}>
-                    ${balance?.usd_available.toFixed(2) ?? "0.00"}
+                    R${balance?.brl_available.toFixed(2) ?? "0.00"}
                   </p>
 
                   {(balance?.brl_pending ?? 0) > 0 && (
@@ -208,7 +208,7 @@ export default function WalletPage() {
                       style={{ color: "#fbbf24" }}
                     >
                       <Clock size={12} />
-                      ${balance!.brl_pending.toFixed(2)} pending
+                      R${balance!.brl_pending.toFixed(2)} pending
                     </p>
                   )}
                 </>
@@ -244,13 +244,13 @@ export default function WalletPage() {
                   <p className="text-sm" style={{ color: C.muted }}>
                     Total deposited{" "}
                     <span className="font-semibold" style={{ color: C.cream }}>
-                      ${balance?.total_deposited_brl.toFixed(2) ?? "0.00"}
+                      R${balance?.total_deposited_brl.toFixed(2) ?? "0.00"}
                     </span>
                   </p>
                   <p className="text-sm" style={{ color: C.muted }}>
                     Total spent{" "}
                     <span className="font-semibold" style={{ color: C.cream }}>
-                      ${balance?.total_spent_brl.toFixed(2) ?? "0.00"}
+                      R${balance?.total_spent_brl.toFixed(2) ?? "0.00"}
                     </span>
                   </p>
                 </div>
@@ -299,7 +299,7 @@ export default function WalletPage() {
                       color: active ? C.rose : C.cream,
                     }}
                   >
-                    ${p}
+                    R${p}
                   </button>
                 );
               })}
@@ -311,7 +311,7 @@ export default function WalletPage() {
                 className="mb-1.5 block text-sm font-medium"
                 style={{ color: C.cream }}
               >
-                Custom amount (USD)
+                Custom amount (BRL)
               </label>
 
               <div className="relative">
@@ -319,7 +319,7 @@ export default function WalletPage() {
                   className="absolute left-3 top-1/2 -translate-y-1/2 font-medium"
                   style={{ color: C.muted }}
                 >
-                  $
+                  R$
                 </span>
                 <input
                   type="number"
@@ -330,7 +330,7 @@ export default function WalletPage() {
                     setDepositAmount(e.target.value);
                     setError(null);
                   }}
-                  className="w-full rounded-xl bg-transparent py-2.5 pl-7 pr-4 outline-none"
+                  className="w-full rounded-xl bg-transparent py-2.5 pl-10 pr-4 outline-none"
                   style={{
                     border: `1px solid ${C.border}`,
                     color: C.cream,
@@ -361,7 +361,7 @@ export default function WalletPage() {
               ) : (
                 <>
                   <CreditCard size={18} />
-                  Deposit ${isValidAmount ? parsedAmount.toFixed(2) : "—"} via Stripe
+                  Deposit R${isValidAmount ? parsedAmount.toFixed(2) : "—"} via Stripe
                 </>
               )}
             </button>
@@ -441,11 +441,11 @@ export default function WalletPage() {
                           color: tx.direction === "credit" ? "#34d399" : "#f87171",
                         }}
                       >
-                        {tx.direction === "credit" ? "+" : "−"}${tx.amount.toFixed(2)}
+                        {tx.direction === "credit" ? "+" : "−"}R${tx.amount.toFixed(2)}
                       </p>
                       {tx.balance_after != null && (
                         <p className="text-xs" style={{ color: C.muted }}>
-                          bal ${tx.balance_after.toFixed(2)}
+                          bal R${tx.balance_after.toFixed(2)}
                         </p>
                       )}
                     </div>

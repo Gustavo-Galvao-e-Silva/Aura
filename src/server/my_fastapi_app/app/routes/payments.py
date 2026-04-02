@@ -36,7 +36,7 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 class CreateCheckoutRequest(BaseModel):
     username: str
-    amount_usd: float
+    amount_brl: float
     success_url: str = "http://localhost:5173/wallet?deposit=success"
     cancel_url: str = "http://localhost:5173/wallet?deposit=cancelled"
 
@@ -122,26 +122,26 @@ async def create_checkout(
     The frontend should redirect the user to the returned `checkout_url`.
     After payment, Stripe will POST to /payments/webhook.
     """
-    if data.amount_usd < 1.0:
-        raise HTTPException(status_code=400, detail="Minimum deposit is $1.00")
+    if data.amount_brl < 1.0:
+        raise HTTPException(status_code=400, detail="Minimum deposit is R$1.00")
 
     result = await db.execute(select(Users).where(Users.username == data.username))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Create Stripe session
+    # Create Stripe session (BRL, charged in centavos)
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             line_items=[
                 {
                     "price_data": {
-                        "currency": "usd",
+                        "currency": "brl",
                         "product_data": {
                             "name": "Revellio Wallet Deposit",
                             "description": f"Top-up for @{data.username}",
                         },
-                        "unit_amount": int(data.amount_usd * 100),
+                        "unit_amount": int(data.amount_brl * 100),
                     },
                     "quantity": 1,
                 }
@@ -149,7 +149,7 @@ async def create_checkout(
             mode="payment",
             success_url=data.success_url,
             cancel_url=data.cancel_url,
-            metadata={"username": data.username, "amount_usd": str(data.amount_usd)},
+            metadata={"username": data.username, "amount_brl": str(data.amount_brl)},
         )
     except stripe.StripeError as exc:
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc.user_message}")
@@ -157,10 +157,10 @@ async def create_checkout(
     # Persist Checkout row so the webhook can be matched idempotently
     checkout = Checkout(
         username=data.username,
-        currency="USD",
-        amount=data.amount_usd,
+        currency="BRL",
+        amount=data.amount_brl,
         stripe_checkout_session_id=session.id,
-        metadata_json={"amount_usd": data.amount_usd},
+        metadata_json={"amount_brl": data.amount_brl},
     )
     db.add(checkout)
     await db.commit()
@@ -267,9 +267,9 @@ async def stripe_webhook(
     session_id = session_obj.get("id")
     payment_intent_id = session_obj.get("payment_intent")
     username = (session_obj.get("metadata") or {}).get("username")
-    amount_usd = float((session_obj.get("metadata") or {}).get("amount_usd", 0))
+    amount_brl = float((session_obj.get("metadata") or {}).get("amount_brl", 0))
 
-    if not username or amount_usd <= 0:
+    if not username or amount_brl <= 0:
         print("  ⚠️  Missing username or amount in session metadata")
         return {"received": True, "processed": False}
 
@@ -293,12 +293,12 @@ async def stripe_webhook(
     # Get or create wallet
     wallet = await _get_or_create_wallet(username, db)
 
-    balance_before = wallet.usd_available
+    balance_before = wallet.brl_available
 
-    # Credit wallet
-    wallet.usd_available += amount_usd
-    wallet.total_deposited_brl += amount_usd
-    wallet.brl_pending = max(0.0, wallet.brl_pending - amount_usd)
+    # Credit wallet with BRL
+    wallet.brl_available += amount_brl
+    wallet.total_deposited_brl += amount_brl
+    wallet.brl_pending = max(0.0, wallet.brl_pending - amount_brl)
 
     # Write immutable transaction record
     tx = Transaction(
@@ -307,14 +307,14 @@ async def stripe_webhook(
         checkout_id=checkout.id if checkout else None,
         transaction_type="deposit",
         status="completed",
-        asset="USD",
+        asset="BRL",
         direction="credit",
-        amount=amount_usd,
+        amount=amount_brl,
         balance_before=balance_before,
-        balance_after=wallet.usd_available,
+        balance_after=wallet.brl_available,
         stripe_event_id=event.get("id"),
         stripe_payment_intent_id=payment_intent_id,
-        description=f"Stripe deposit ${amount_usd:.2f}",
+        description=f"Stripe deposit R${amount_brl:.2f}",
     )
     db.add(tx)
 
@@ -326,7 +326,7 @@ async def stripe_webhook(
 
     await db.commit()
 
-    print(f"  ✅ Credited @{username} ${amount_usd:.2f} | balance {balance_before:.2f} → {wallet.usd_available:.2f}")
+    print(f"  ✅ Credited @{username} R${amount_brl:.2f} | balance {balance_before:.2f} → {wallet.brl_available:.2f}")
     return {"received": True, "processed": True}
 
 
