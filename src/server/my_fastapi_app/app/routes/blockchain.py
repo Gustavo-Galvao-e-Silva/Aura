@@ -197,14 +197,15 @@ async def search_similar_reasoning(
 async def detect_contradictions(
     min_similarity: float = Query(0.75, ge=0.5, le=0.95, description="Minimum context similarity"),
     lookback_days: int = Query(30, ge=1, le=365, description="Days to look back"),
+    use_llm_verification: bool = Query(True, description="Use LLM to verify contradictions"),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Detect potential contradictions in AI decision-making.
+    Detect contradictions in AI decision-making using LLM verification.
 
     Finds pairs of decisions where:
     - Market conditions were very similar (high vector similarity)
-    - But the AI made opposite recommendations (pay vs wait)
+    - LLM confirms they are actually contradictory (not just keyword matches)
 
     This helps identify:
     - Inconsistent decision patterns
@@ -213,72 +214,39 @@ async def detect_contradictions(
 
     - **min_similarity**: How similar conditions must be (0.5-0.95)
     - **lookback_days**: Time window to analyze (1-365 days)
+    - **use_llm_verification**: Use LLM to verify contradictions (default: True)
 
-    Returns pairs of potentially contradictory decisions.
+    Returns verified contradictory decision pairs.
     """
-    # Find decisions with high similarity but different recommendations
-    # This query finds all pairs where similarity is high but reasoning differs
-    # Using interval multiplication for proper parameterization: (:days * INTERVAL '1 day')
-    contradiction_query = text("""
-        WITH recent_decisions AS (
-            SELECT
-                id,
-                timestamp,
-                reasoning,
-                decision_hash,
-                stellar_tx_id,
-                reasoning_embedding
-            FROM audit_log
-            WHERE reasoning_embedding IS NOT NULL
-            AND timestamp >= NOW() - (:days * INTERVAL '1 day')
-        )
-        SELECT
-            a.id as id_a,
-            a.timestamp as timestamp_a,
-            a.reasoning as reasoning_a,
-            a.decision_hash as hash_a,
-            b.id as id_b,
-            b.timestamp as timestamp_b,
-            b.reasoning as reasoning_b,
-            b.decision_hash as hash_b,
-            1 - (a.reasoning_embedding <=> b.reasoning_embedding) as similarity
-        FROM recent_decisions a
-        CROSS JOIN recent_decisions b
-        WHERE a.id < b.id
-        AND 1 - (a.reasoning_embedding <=> b.reasoning_embedding) >= :min_similarity
-        AND (
-            (a.reasoning ILIKE '%pay%' AND b.reasoning ILIKE '%wait%')
-            OR (a.reasoning ILIKE '%wait%' AND b.reasoning ILIKE '%pay%')
-            OR (a.reasoning ILIKE '%bullish%' AND b.reasoning ILIKE '%bearish%')
-            OR (a.reasoning ILIKE '%bearish%' AND b.reasoning ILIKE '%bullish%')
-        )
-        ORDER BY similarity DESC
-        LIMIT 10
-    """)
+    # Import the LLM verification function from trust engine
+    from agents.trust import check_recent_contradictions
 
-    result = await db.execute(
-        contradiction_query,
-        {"min_similarity": min_similarity, "days": lookback_days}
+    # Use the trust engine's LLM-verified contradiction checker
+    verified_contradictions = await check_recent_contradictions(
+        db=db,
+        lookback_days=lookback_days,
+        min_similarity=min_similarity,
+        use_llm_verification=use_llm_verification
     )
-    rows = result.fetchall()
 
+    # Format for API response
     contradictions = []
-    for row in rows:
+    for c in verified_contradictions:
         contradictions.append({
-            "similarity_score": round(float(row.similarity), 4),
+            "similarity_score": round(c["similarity"], 4),
             "decision_a": {
-                "id": row.id_a,
-                "timestamp": row.timestamp_a.isoformat(),
-                "reasoning": row.reasoning_a,
-                "audit_hash": row.hash_a
+                "id": c["id_a"],
+                "timestamp": c["timestamp_a"],
+                "reasoning": c["reasoning_a"],
+                "audit_hash": c.get("audit_hash_a", "")
             },
             "decision_b": {
-                "id": row.id_b,
-                "timestamp": row.timestamp_b.isoformat(),
-                "reasoning": row.reasoning_b,
-                "audit_hash": row.hash_b
+                "id": c["id_b"],
+                "timestamp": c["timestamp_b"],
+                "reasoning": c["reasoning_b"],
+                "audit_hash": c.get("audit_hash_b", "")
             },
-            "message": "AI made different recommendations under similar conditions"
+            "message": c.get("explanation", "AI made different recommendations under similar conditions")
         })
 
     return contradictions
