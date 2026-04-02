@@ -10,7 +10,6 @@ from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 
 from agents.aura_graph import aura_graph
-from agents.auto_executor import auto_executor_loop
 from db.models import Base
 from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.db.session import engine
@@ -43,25 +42,18 @@ async def lifespan(app: FastAPI):
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
 
-    print("🚀 Revellio Backend: Starting background tasks...")
-    market_monitor_task = asyncio.create_task(monitor_market_loop())
-    auto_executor_task = asyncio.create_task(auto_executor_loop())
+    print("🚀 Revellio Backend: Starting Aura agent workflow...")
+    task = asyncio.create_task(monitor_market_loop())
     print("🚀 Revellio Backend: Startup complete!")
-    print("   ✅ Market Monitor: Running")
-    print("   ✅ Auto-Executor: Running")
+    print("   ✅ Aura Graph: Running (includes auto-executor)")
 
     yield  # Application runs here
 
     # Shutdown
     print("👋 Revellio Backend: Shutting down...")
-    market_monitor_task.cancel()
-    auto_executor_task.cancel()
+    task.cancel()
     try:
-        await market_monitor_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await auto_executor_task
+        await task
     except asyncio.CancelledError:
         pass
 
