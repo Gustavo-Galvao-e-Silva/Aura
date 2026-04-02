@@ -1,26 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUser } from "@clerk/react-router";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  Bell, Clock, House, School, ScrollText,
-  ShoppingCart, TrendingDown, TrendingUp,
+  Bell, Clock, House, School, ScrollText, ShoppingCart,
+  TrendingDown, TrendingUp, DollarSign,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
+import { motion } from "framer-motion";
 import Navbar from "../components/Navbar";
 import apiClient from "../API/client";
 import createUser from "../API/UserClient";
 
 // ─── palette ──────────────────────────────────────────────────────────────────
 const C = {
-  bg:      "#2C3930",
-  surface: "rgba(63,79,68,0.18)",
-  border:  "rgba(162,123,92,0.1)",
-  rose:    "#A27B5C",
-  cream:   "#DCD7C9",
-  muted:   "rgba(220,215,201,0.5)",
+  bg:    "#2C3930",
+  deep:  "#1a2420",
+  card:  "rgba(30,41,34,0.98)",
+  cardAlt: "rgba(63,79,68,0.18)",
+  border: "rgba(162,123,92,0.15)",
+  rose:  "#A27B5C",
+  cream: "#DCD7C9",
+  muted: "rgba(220,215,201,0.5)",
+  green: "#34d399",
+  red:   "#f87171",
 };
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -34,14 +39,113 @@ type DashboardExpensesResponse = { count: number; next_liability: Liability | nu
 type FrankfurterTimeSeries = { base: string; start_date: string; end_date: string; rates: Record<string, { BRL: number }> };
 type FrankfurterLatest    = { base: string; date: string; rates: { BRL: number } };
 
-// ─── custom tooltip for Recharts ─────────────────────────────────────────────
+// ─── Card ─────────────────────────────────────────────────────────────────────
+function Card({ children, className = "", style = {} }: {
+  children: React.ReactNode; className?: string; style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={`rounded-2xl ${className}`}
+      style={{ background: C.card, border: `1px solid ${C.border}`, ...style }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── ReactBits: SpotlightCard ─────────────────────────────────────────────────
+function SpotlightCard({ children, className = "", style = {} }: {
+  children: React.ReactNode; className?: string; style?: React.CSSProperties;
+}) {
+  const ref     = useRef<HTMLDivElement>(null);
+  const spotRef = useRef<HTMLDivElement>(null);
+
+  const onMove = (e: React.MouseEvent) => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect || !spotRef.current) return;
+    spotRef.current.style.background =
+      `radial-gradient(350px circle at ${e.clientX - rect.left}px ${e.clientY - rect.top}px, rgba(162,123,92,0.1), transparent 70%)`;
+    spotRef.current.style.opacity = "1";
+  };
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={() => { if (spotRef.current) spotRef.current.style.opacity = "0"; }}
+      className={`relative overflow-hidden ${className}`}
+      style={style}
+    >
+      <div ref={spotRef} style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0, transition: "opacity 0.3s", borderRadius: "inherit" }} />
+      {children}
+    </div>
+  );
+}
+
+// ─── ReactBits: CountUp ───────────────────────────────────────────────────────
+function CountUp({ to, decimals = 0, duration = 1200 }: { to: number; decimals?: number; duration?: number }) {
+  const [val, setVal] = useState(0);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (to === 0) { setVal(0); return; }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / duration, 1);
+      setVal((1 - Math.pow(1 - t, 3)) * to);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else setVal(to);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [to, duration]);
+
+  return <>{val.toFixed(decimals)}</>;
+}
+
+// ─── ReactBits: ShimmerButton ─────────────────────────────────────────────────
+function ShimmerButton({ children, onClick, disabled }: {
+  children: React.ReactNode; onClick?: () => void; disabled?: boolean;
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      disabled={disabled}
+      whileHover={{ scale: disabled ? 1 : 1.04 }}
+      whileTap={{ scale: disabled ? 1 : 0.96 }}
+      className="relative overflow-hidden rounded-xl px-5 py-2 text-sm font-bold disabled:opacity-50 shrink-0"
+      style={{ background: C.rose, color: C.bg }}
+    >
+      <motion.div
+        style={{ position: "absolute", top: 0, bottom: 0, width: "50%", pointerEvents: "none",
+          background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)" }}
+        animate={{ x: ["-130%", "280%"] }}
+        transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 1, ease: "easeInOut" }}
+      />
+      <span className="relative z-10">{children}</span>
+    </motion.button>
+  );
+}
+
+// ─── ReactBits: PulseDot ──────────────────────────────────────────────────────
+function PulseDot({ color = C.green }: { color?: string }) {
+  return (
+    <span className="relative flex h-2 w-2 shrink-0">
+      <motion.span className="absolute inline-flex h-full w-full rounded-full" style={{ background: color }}
+        animate={{ scale: [1, 2.4], opacity: [0.6, 0] }}
+        transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
+      />
+      <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: color }} />
+    </span>
+  );
+}
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div
-      className="rounded-xl px-3 py-2 text-xs font-semibold shadow-xl"
-      style={{ background: "#253229", border: `1px solid ${C.border}`, color: C.cream }}
-    >
+    <div className="rounded-xl px-3 py-2 text-xs font-semibold shadow-xl"
+      style={{ background: C.deep, border: `1px solid ${C.border}`, color: C.cream }}>
       <p style={{ color: C.muted }}>{label}</p>
       <p style={{ color: C.rose }}>{payload[0].value?.toFixed(4)} BRL</p>
     </div>
@@ -95,7 +199,7 @@ export default function Dashboard() {
     (async () => {
       try {
         setExpensesLoading(true);
-        const res = await apiClient.get(`/expenses/user/${user!.username}`, { params: { filter_by: "upcoming", limit: 6 } });
+        const res = await apiClient.get(`/expenses/user/${user!.username}`, { params: { filter_by: "upcoming", limit: 10 } });
         setUpcomingExpenses(res.data["user-expenses"] ?? []);
       } catch { /* silent */ } finally { setExpensesLoading(false); }
     })();
@@ -109,14 +213,12 @@ export default function Dashboard() {
         const start = new Date();
         start.setDate(today.getDate() - 14);
         const startStr = start.toISOString().split("T")[0];
-
         const [latestRes, seriesRes] = await Promise.all([
           fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=BRL"),
           fetch(`https://api.frankfurter.dev/v1/${startStr}..?base=USD&symbols=BRL`),
         ]);
-        const latestJson: FrankfurterLatest      = await latestRes.json();
-        const seriesJson: FrankfurterTimeSeries  = await seriesRes.json();
-
+        const latestJson: FrankfurterLatest     = await latestRes.json();
+        const seriesJson: FrankfurterTimeSeries = await seriesRes.json();
         setLatestRate(latestJson.rates.BRL);
         setFxSeries(
           Object.entries(seriesJson.rates)
@@ -143,246 +245,256 @@ export default function Dashboard() {
   if (!isLoaded) return <div style={{ minHeight: "100vh", background: C.bg }} />;
   if (!isSignedIn || !user) return null;
 
-  const previousRate  = fxSeries.length >= 2 ? fxSeries[fxSeries.length - 2].value : null;
-  const rateChange    = latestRate !== null && previousRate !== null ? latestRate - previousRate : null;
-  const rateUp        = (rateChange ?? 0) >= 0;
+  const previousRate = fxSeries.length >= 2 ? fxSeries[fxSeries.length - 2].value : null;
+  const rateChange   = latestRate !== null && previousRate !== null ? latestRate - previousRate : null;
+  const rateUp       = (rateChange ?? 0) >= 0;
 
   const schedulerBillsCount = dashboardSummary?.count ?? 0;
   const nextLiability       = dashboardSummary?.next_liability ?? null;
+
   function getCategoryIcon(category: string | null) {
     switch (category) {
-      case "Education": return <School  size={18} />;
-      case "Housing":   return <House   size={18} />;
-      case "Food":      return <ShoppingCart size={18} />;
-      default:          return <ScrollText  size={18} />;
+      case "Education": return <School       size={16} />;
+      case "Housing":   return <House        size={16} />;
+      case "Food":      return <ShoppingCart size={16} />;
+      default:          return <ScrollText   size={16} />;
     }
   }
 
   function getStatusBadge(e: Liability) {
     if (e.is_paid) return (
-      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(52,211,153,0.15)", color: "#34d399" }}>Paid</span>
+      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(52,211,153,0.15)", color: C.green }}>Paid</span>
     );
     if (new Date(e.due_date) < new Date()) return (
-      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(248,113,113,0.15)", color: "#f87171" }}>Overdue</span>
+      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(248,113,113,0.15)", color: C.red }}>Overdue</span>
     );
     return (
-      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(162,123,92,0.15)", color: C.rose }}>Upcoming</span>
+      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(162,123,92,0.15)", color: C.rose }}>Due</span>
     );
   }
 
   function formatDate(d: string) {
     const p = new Date(d);
     if (Number.isNaN(p.getTime())) return d;
-    return p.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return p.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
+
 
   return (
     <div className="flex h-screen overflow-hidden font-sans antialiased" style={{ background: C.bg }}>
       <Navbar />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
 
-        {/* Top bar */}
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
         <header
-          className="flex h-12 shrink-0 items-center justify-between px-4 sm:px-5 lg:px-6"
+          className="flex h-12 shrink-0 items-center justify-between px-4 sm:px-5"
           style={{ borderBottom: `1px solid ${C.border}` }}
         >
-          <h2 className="text-lg font-bold" style={{ color: C.cream }}>Dashboard</h2>
+          <h2 className="text-lg font-black" style={{ color: C.cream }}>Dashboard</h2>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button
-              className="flex h-9 w-9 items-center justify-center rounded-xl transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-xl"
               style={{ border: `1px solid ${C.border}`, color: C.muted }}
             >
-              <Bell size={16} />
+              <Bell size={15} />
             </button>
-
-            <div className="flex items-center gap-3" style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: "1rem" }}>
+            <div className="flex items-center gap-2.5" style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: "0.75rem" }}>
               <span className="hidden text-sm font-semibold sm:block" style={{ color: C.cream }}>
                 {[user.firstName, user.lastName].filter(Boolean).join(" ") || user.username}
               </span>
-              <img className="h-9 w-9 rounded-full object-cover" style={{ border: `2px solid rgba(162,123,92,0.3)` }} src={user.imageUrl} alt="" />
+              <img className="h-8 w-8 rounded-full object-cover" style={{ border: `2px solid rgba(162,123,92,0.3)` }} src={user.imageUrl} alt="" />
             </div>
           </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="w-full space-y-3 p-3 sm:p-4 lg:p-5">
+        {/* ── Main ───────────────────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-hidden min-h-0">
+          <div className="flex flex-col h-full p-3 gap-3">
 
-            {/* Stat cards */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {/* ── Stat Cards ─────────────────────────────────────────────────── */}
+            <div className="grid grid-cols-3 gap-3 shrink-0">
 
-              {/* Scheduled bills */}
-              <div className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Scheduled Bills</p>
-                <p className="text-3xl font-black" style={{ color: C.cream }}>
-                  {dashboardSummaryLoading ? "—" : schedulerBillsCount}
-                </p>
-                <div className="mt-3 flex items-center gap-1.5 text-sm font-medium" style={{ color: "#34d399" }}>
-                  <TrendingUp size={14} />
-                  <span>Unpaid confirmed expenses</span>
-                </div>
-              </div>
+              {/* Scheduled Bills */}
+              <Card>
+                <motion.div className="p-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(52,211,153,0.1)", color: C.green }}>
+                      <TrendingUp size={16} />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-right leading-tight" style={{ color: C.muted }}>
+                      Scheduled<br />Bills
+                    </span>
+                  </div>
+                  <p className="text-4xl font-black" style={{ color: C.cream }}>
+                    {dashboardSummaryLoading ? "—" : <CountUp to={schedulerBillsCount} />}
+                  </p>
+                  <p className="mt-1.5 text-xs font-medium" style={{ color: C.green }}>Unpaid confirmed</p>
+                </motion.div>
+              </Card>
 
-              {/* Next payment */}
-              <div className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Next Payment Due</p>
-                <p className="text-3xl font-black" style={{ color: C.cream }}>
-                  {dashboardSummaryLoading ? "—" : nextLiability ? formatDate(nextLiability.due_date) : "None"}
-                </p>
-                <div className="mt-3 flex items-center gap-1.5 text-sm font-medium" style={{ color: C.rose }}>
-                  <Clock size={14} />
-                  <span>
-                    {dashboardSummaryLoading ? "Loading..." : nextLiability
-                      ? `${nextLiability.currency} ${nextLiability.amount} — ${nextLiability.name}`
-                      : "You're all caught up"}
-                  </span>
-                </div>
-              </div>
+              {/* Next Payment */}
+              <Card>
+                <motion.div className="p-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}>
+                      <Clock size={16} />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-right leading-tight" style={{ color: C.muted }}>
+                      Next<br />Payment
+                    </span>
+                  </div>
+                  <p className="text-4xl font-black leading-tight" style={{ color: C.cream }}>
+                    {dashboardSummaryLoading ? "—" : nextLiability ? formatDate(nextLiability.due_date) : "None"}
+                  </p>
+                  <p className="mt-1.5 text-xs font-medium truncate" style={{ color: C.rose }}>
+                    {dashboardSummaryLoading ? "Loading…" : nextLiability
+                      ? `${nextLiability.currency} ${nextLiability.amount} · ${nextLiability.name}`
+                      : "All clear"}
+                  </p>
+                </motion.div>
+              </Card>
 
-              {/* Rate alert */}
-              <div className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Set Rate Alert</p>
-                <input
-                  value={targetQuote}
-                  onChange={e => setTargetQuote(e.target.value)}
-                  className="mt-1 w-full rounded-xl bg-transparent px-0 text-2xl font-black outline-none placeholder:opacity-30"
-                  style={{ color: C.cream, caretColor: C.rose }}
-                  placeholder="5.0000"
-                  type="number"
-                  step="0.0001"
-                />
-                <div className="mt-3">
-                  <button
-                    onClick={handleSubmitQuoteAlert}
-                    disabled={isSubmittingQuote}
-                    className="rounded-xl px-5 py-2 text-sm font-bold transition-colors disabled:opacity-50"
-                    style={{ background: C.rose, color: C.bg }}
-                  >
-                    {isSubmittingQuote ? "Saving…" : "Save Alert"}
-                  </button>
-                </div>
-              </div>
+              {/* FX Rate */}
+              <Card>
+                <motion.div className="p-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}>
+                        <DollarSign size={16} />
+                      </div>
+                      <PulseDot color={C.green} />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-right leading-tight" style={{ color: C.muted }}>
+                      USD / BRL<br />Live Rate
+                    </span>
+                  </div>
+                  <p className="text-4xl font-black" style={{ color: C.cream }}>
+                    {fxLoading ? "—" : <CountUp to={latestRate ?? 0} decimals={4} />}
+                  </p>
+                  <p className="mt-1.5 text-xs font-medium" style={{ color: C.muted }}>Brazilian Real per Dollar</p>
+                </motion.div>
+              </Card>
             </div>
 
-            {/* Bottom grid */}
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+            {/* ── Main Content Grid ───────────────────────────────────────────── */}
+            <div className="flex-1 grid gap-3 min-h-0" style={{ gridTemplateColumns: "5fr 7fr" }}>
 
-              {/* Upcoming expenses */}
-              <div className="flex flex-col gap-2 lg:col-span-4">
-                <div className="flex items-center justify-between">
+              {/* Left: Upcoming Expenses */}
+              <Card className="min-h-0 flex flex-col p-4">
+                <div className="shrink-0 flex items-center justify-between mb-3">
                   <h4 className="text-base font-bold" style={{ color: C.cream }}>Upcoming Expenses</h4>
-                  <Link className="text-xs font-semibold transition-colors" style={{ color: C.rose }} to="/expenses">
-                    View All
+                  <Link className="text-xs font-semibold" style={{ color: C.rose }} to="/expenses">
+                    View All →
                   </Link>
                 </div>
 
-                <div className="space-y-2">
+                <div className="flex-1 overflow-y-auto space-y-2 pr-0.5" style={{ scrollbarWidth: "none" as const }}>
                   {expensesLoading ? (
-                    <div className="rounded-2xl p-3 text-sm" style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted }}>
-                      Loading…
-                    </div>
+                    <div className="flex items-center justify-center h-full text-sm" style={{ color: C.muted }}>Loading…</div>
                   ) : upcomingExpenses.length === 0 ? (
-                    <div className="rounded-2xl p-3 text-sm" style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted }}>
-                      No upcoming expenses.
-                    </div>
-                  ) : upcomingExpenses.map(expense => (
-                    <div key={expense.id} className="flex items-center gap-3 rounded-2xl p-3"
-                      style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                        style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}>
-                        {getCategoryIcon(expense.category)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold" style={{ color: C.cream }}>{expense.name}</p>
-                        <p className="text-xs" style={{ color: C.muted }}>Due {expense.due_date}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold" style={{ color: C.cream }}>{expense.currency} {expense.amount}</p>
-                        {getStatusBadge(expense)}
-                      </div>
-                    </div>
+                    <div className="flex items-center justify-center h-full text-sm" style={{ color: C.muted }}>No upcoming expenses.</div>
+                  ) : upcomingExpenses.map((expense, i) => (
+                    <motion.div key={expense.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + i * 0.055 }}>
+                      <SpotlightCard
+                        className="flex items-center gap-3 rounded-xl p-3 cursor-default"
+                        style={{ background: C.cardAlt, border: `1px solid rgba(162,123,92,0.1)` }}
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                          style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}>
+                          {getCategoryIcon(expense.category)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold" style={{ color: C.cream }}>{expense.name}</p>
+                          <p className="text-xs" style={{ color: C.muted }}>{expense.due_date}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold" style={{ color: C.cream }}>{expense.currency} {expense.amount}</p>
+                          {getStatusBadge(expense)}
+                        </div>
+                      </SpotlightCard>
+                    </motion.div>
                   ))}
                 </div>
-              </div>
+              </Card>
 
-              {/* FX chart */}
-              <div className="flex flex-col gap-2 lg:col-span-8">
-                <div className="flex items-center justify-between">
+              {/* Right: FX Chart + Rate Alert */}
+              <Card className="min-h-0 flex flex-col p-4">
+                <div className="shrink-0 flex items-center justify-between mb-3">
                   <h4 className="text-base font-bold" style={{ color: C.cream }}>Market Watch — USD / BRL</h4>
+                  <div className="flex items-center gap-2">
+                    <PulseDot color={C.green} />
+                    <span className="text-xs" style={{ color: C.muted }}>Live</span>
+                  </div>
                 </div>
 
-                <div className="flex flex-col rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}`, minHeight: 220 }}>
-                  {fxLoading ? (
-                    <div className="flex flex-1 items-center justify-center text-sm" style={{ color: C.muted }}>
-                      Loading FX data…
+                {/* Rate + change */}
+                {!fxLoading && (
+                  <div className="shrink-0 flex items-center gap-5 mb-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: C.muted }}>Rate</p>
+                      <p className="text-2xl font-black" style={{ color: C.cream }}>
+                        {latestRate?.toFixed(4) ?? "—"}
+                        <span className="ml-1 text-sm font-normal" style={{ color: C.muted }}>BRL</span>
+                      </p>
                     </div>
-                  ) : (
-                    <>
-                      {/* Rate + change */}
-                      <div className="mb-3 flex items-center gap-4">
-                        <div>
-                          <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Rate</p>
-                          <p className="text-2xl font-black" style={{ color: C.cream }}>
-                            {latestRate?.toFixed(4) ?? "—"}
-                            <span className="ml-1.5 text-sm font-normal" style={{ color: C.muted }}>BRL</span>
-                          </p>
-                        </div>
-                        <div style={{ width: 1, height: 40, background: C.border }} />
-                        <div>
-                          <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>24h Change</p>
-                          <p className="flex items-center gap-1.5 text-2xl font-black"
-                            style={{ color: rateUp ? "#34d399" : "#f87171" }}>
-                            {rateUp ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
-                            {rateChange !== null ? rateChange.toFixed(4) : "—"}
-                          </p>
-                        </div>
-                      </div>
+                    <div style={{ width: 1, height: 36, background: C.border }} />
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: C.muted }}>24h Change</p>
+                      <p className="flex items-center gap-1 text-2xl font-black" style={{ color: rateUp ? C.green : C.red }}>
+                        {rateUp ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
+                        {rateChange !== null ? (rateUp ? "+" : "") + rateChange.toFixed(4) : "—"}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-                      {/* Recharts area chart */}
-                      <div className="flex-1" style={{ minHeight: 135 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={fxSeries} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                            <defs>
-                              <linearGradient id="fxGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%"  stopColor="#A27B5C" stopOpacity={0.25} />
-                                <stop offset="95%" stopColor="#A27B5C" stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid vertical={false} stroke="rgba(162,123,92,0.06)" />
-                            <XAxis
-                              dataKey="date"
-                              tick={{ fill: "rgba(220,215,201,0.4)", fontSize: 10 }}
-                              axisLine={false}
-                              tickLine={false}
-                              interval="preserveStartEnd"
-                            />
-                            <YAxis
-                              domain={["auto", "auto"]}
-                              tick={{ fill: "rgba(220,215,201,0.4)", fontSize: 10 }}
-                              axisLine={false}
-                              tickLine={false}
-                              tickFormatter={v => v.toFixed(2)}
-                            />
-                            <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(162,123,92,0.2)", strokeWidth: 1 }} />
-                            <Area
-                              type="monotone"
-                              dataKey="value"
-                              stroke="#A27B5C"
-                              strokeWidth={2}
-                              fill="url(#fxGradient)"
-                              dot={false}
-                              activeDot={{ r: 4, fill: "#A27B5C", stroke: "#2C3930", strokeWidth: 2 }}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </>
+                {/* Chart */}
+                <div className="flex-1 min-h-0">
+                  {fxLoading ? (
+                    <div className="flex items-center justify-center h-full text-sm" style={{ color: C.muted }}>Loading FX data…</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={fxSeries} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="fxGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#A27B5C" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#A27B5C" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid vertical={false} stroke="rgba(162,123,92,0.06)" />
+                        <XAxis dataKey="date" tick={{ fill: "rgba(220,215,201,0.4)", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                        <YAxis domain={["auto", "auto"]} tick={{ fill: "rgba(220,215,201,0.4)", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(2)} />
+                        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(162,123,92,0.2)", strokeWidth: 1 }} />
+                        <Area type="monotone" dataKey="value" stroke="#A27B5C" strokeWidth={2} fill="url(#fxGradient)" dot={false}
+                          activeDot={{ r: 4, fill: "#A27B5C", stroke: C.deep, strokeWidth: 2 }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   )}
                 </div>
-              </div>
+
+                {/* Rate Alert */}
+                <div className="shrink-0 mt-3 pt-3 flex items-center gap-3" style={{ borderTop: `1px solid ${C.border}` }}>
+                  <Bell size={14} className="shrink-0" style={{ color: C.muted }} />
+                  <p className="text-[10px] font-bold uppercase tracking-widest shrink-0" style={{ color: C.muted }}>Rate Alert</p>
+                  <input
+                    value={targetQuote}
+                    onChange={e => setTargetQuote(e.target.value)}
+                    className="flex-1 bg-transparent text-sm font-bold outline-none placeholder:opacity-30 min-w-0"
+                    style={{ color: C.cream, caretColor: C.rose }}
+                    placeholder="Target rate (e.g. 5.0000)"
+                    type="number"
+                    step="0.0001"
+                  />
+                  <ShimmerButton onClick={handleSubmitQuoteAlert} disabled={isSubmittingQuote}>
+                    {isSubmittingQuote ? "Saving…" : "Save Alert"}
+                  </ShimmerButton>
+                </div>
+              </Card>
             </div>
+
+
           </div>
         </main>
       </div>

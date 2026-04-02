@@ -75,9 +75,9 @@ const providerImpactMap: Record<ProviderKey, string> = {
 };
 
 const providerLogoMap: Record<ProviderKey, string> = {
-  crebit: "./crebit-logo.png",
-  ofx: "./ofx_logo.webp",
-  remitly: "./remitly-logo.png",
+  crebit: "/crebit-logo.png",
+  ofx: "/ofx_logo.webp",
+  remitly: "/remitly-logo.png",
 };
 
 export default function TransferRoutesPage() {

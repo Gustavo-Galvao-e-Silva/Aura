@@ -163,8 +163,8 @@ export default function FinGlobalRegisterPage() {
         }}
       >
         <div className="flex items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded-lg">
-            <img className="min-w-[40px] h-[50px]" src="logo.png" />
+          <div className="flex items-center justify-center rounded-lg">
+            <img className="h-[6.75rem] w-auto" src="logo_v1.png" alt="Revellio" />
           </div>
           <h1 className="text-xl font-bold tracking-tight" style={{ color: C.cream }}>
             Revellio

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import MarketAnalysisCard from "../components/MarketAnalysisCard";
+import Modal from "../components/Modal";
 import { useUser } from "@clerk/react-router";
 
 const C = {
@@ -93,6 +94,23 @@ type ScheduledBill = {
   isPredicted: boolean;
 };
 
+type SettlementReceipt = {
+  billName: string;
+  status: string;
+  message: string;
+  liability_id: number;
+  liability_name: string;
+  amount_usd: number;
+  amount_brl_spent: number;
+  fx_rate: number;
+  fx_provider?: string;
+  stellar_mint_tx?: string | null;
+  stellar_swap_tx?: string | null;
+  database_transaction_id: number;
+  new_balance_brl: number;
+  new_balance_usd: number;
+};
+
 function getRecommendationFromDecision(
   decision: PaymentDecision
 ): BillRecommendation {
@@ -131,6 +149,8 @@ export default function BillScheduler() {
     null
   );
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [settlementReceipt, setSettlementReceipt] =
+    useState<SettlementReceipt | null>(null);
 
   function formatCurrency(value: number, currency: "USD" | "BRL") {
     return new Intl.NumberFormat(currency === "BRL" ? "pt-BR" : "en-US", {
@@ -249,14 +269,11 @@ export default function BillScheduler() {
         throw new Error(detail);
       }
 
-      const result = await response.json();
-      alert(
-        `Payment successful!\n\n` +
-          `Paid: ${bill.name}\n` +
-          `Amount: $${result.amount_usd} USD (R$${result.amount_brl_spent} BRL)\n` +
-          `Rate: ${result.fx_rate} BRL/USD (from ${result.fx_provider})\n\n` +
-          `Stellar TX: ${String(result.stellar_mint_tx || "").slice(0, 10)}...`
-      );
+      const result = (await response.json()) as SettlementReceipt;
+      setSettlementReceipt({
+        ...result,
+        billName: bill.name,
+      });
 
       await loadStatus();
     } catch (err) {
@@ -753,6 +770,113 @@ export default function BillScheduler() {
           </div>
         </main>
       </div>
+
+      <Modal
+        isOpen={settlementReceipt !== null}
+        onClose={() => setSettlementReceipt(null)}
+      >
+        {settlementReceipt && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-xl font-bold" style={{ color: C.cream }}>
+                Payment successful
+              </h3>
+              <p className="mt-1 text-sm" style={{ color: C.muted }}>
+                {settlementReceipt.message || "Your bill was settled successfully."}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  Bill
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {settlementReceipt.liability_name || settlementReceipt.billName}
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  Status
+                </p>
+                <p className="font-semibold" style={{ color: "#34d399" }}>
+                  {settlementReceipt.status}
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  Amount Settled
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {formatCurrency(settlementReceipt.amount_usd, "USD")}
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  BRL Spent
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {formatCurrency(settlementReceipt.amount_brl_spent, "BRL")}
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  FX Rate
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {settlementReceipt.fx_rate.toFixed(4)} BRL/USD
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  FX Provider
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {settlementReceipt.fx_provider ?? "Best available route"}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3 text-sm" style={{ border: `1px solid ${C.border}`, background: "rgba(162,123,92,0.1)" }}>
+              <p className="mb-2 font-semibold" style={{ color: C.rose }}>
+                Blockchain audit trail
+              </p>
+              <p className="text-xs" style={{ color: C.muted }}>Network: Stellar Testnet</p>
+              <p className="mt-1 break-all font-mono text-xs" style={{ color: C.cream }}>
+                Mint TX: {settlementReceipt.stellar_mint_tx ?? "N/A"}
+              </p>
+              <p className="mt-1 break-all font-mono text-xs" style={{ color: C.cream }}>
+                Swap TX: {settlementReceipt.stellar_swap_tx ?? "N/A"}
+              </p>
+              <p className="mt-1 text-xs" style={{ color: C.muted }}>
+                Database TX ID: {settlementReceipt.database_transaction_id}
+              </p>
+            </div>
+
+            <div className="rounded-xl p-3 text-sm" style={{ border: `1px solid ${C.border}`, background: "rgba(63,79,68,0.22)" }}>
+              <p className="mb-2 font-semibold" style={{ color: C.cream }}>
+                Updated wallet balances
+              </p>
+              <p style={{ color: C.cream }}>
+                BRL: {formatCurrency(settlementReceipt.new_balance_brl, "BRL")}
+              </p>
+              <p style={{ color: C.cream }}>
+                USD: {formatCurrency(settlementReceipt.new_balance_usd, "USD")}
+              </p>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setSettlementReceipt(null)}
+                className="rounded-lg px-4 py-2 text-sm font-semibold transition hover:opacity-90"
+                style={{ background: C.rose, color: C.bg }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

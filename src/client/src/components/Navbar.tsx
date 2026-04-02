@@ -19,7 +19,7 @@ export default function Navbar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5">
-        <img src="/logo.png" className="h-9 w-auto" alt="" />
+        <img src="/logo_v1.png" className="h-14 w-auto" alt="" />
         <div>
           <h1 className="text-base font-extrabold leading-tight tracking-tight text-[#DCD7C9]">
             Revellio
