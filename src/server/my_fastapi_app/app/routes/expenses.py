@@ -32,6 +32,18 @@ class UpdateExpenseDTO(BaseModel):
     is_paid: bool
 
 
+class ConfirmPredictedExpenseDTO(BaseModel):
+    """
+    DTO for confirming a predicted bill and optionally updating its details.
+    All fields are optional - if not provided, keep the predicted values.
+    """
+    name: str | None = None
+    amount: float | None = None
+    currency: Literal["USD", "BRL"] | None = None
+    due_date: str | None = None
+    category: str | None = None
+
+
 @router.post("/upload-invoice")
 async def upload_invoice(
     username: str = Form(...),
@@ -282,6 +294,66 @@ async def update_expense(
 
     return {
         "status": "success",
+        "expense": expense,
+    }
+
+
+@router.post("/{expense_id}/confirm")
+async def confirm_predicted_expense(
+    expense_id: int,
+    data: ConfirmPredictedExpenseDTO,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Confirm a predicted bill and convert it to an actual liability.
+
+    This allows users to review predicted bills from the Visionary Accountant,
+    make adjustments if needed, and confirm them for auto-execution eligibility.
+
+    - **expense_id**: Unique expense identifier
+    - **data**: Optional updates to the predicted bill (name, amount, currency, due_date, category)
+
+    Returns the confirmed expense details with is_predicted=false.
+    """
+    result = await db.execute(select(Liability).filter(Liability.id == expense_id))
+    expense = result.scalar_one_or_none()
+
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    if not expense.is_predicted:
+        raise HTTPException(
+            status_code=400,
+            detail="This expense is already confirmed (not a predicted bill)"
+        )
+
+    # Apply updates if provided
+    if data.name is not None:
+        expense.name = data.name
+
+    if data.amount is not None:
+        if data.amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+        expense.amount = data.amount
+
+    if data.currency is not None:
+        expense.currency = data.currency
+
+    if data.due_date is not None:
+        expense.due_date = date.fromisoformat(data.due_date) if isinstance(data.due_date, str) else data.due_date
+
+    if data.category is not None:
+        expense.category = data.category
+
+    # Confirm the bill (now eligible for auto-execution)
+    expense.is_predicted = False
+
+    await db.commit()
+    await db.refresh(expense)
+
+    return {
+        "status": "confirmed",
+        "message": "Predicted bill confirmed and now eligible for auto-execution",
         "expense": expense,
     }
 
