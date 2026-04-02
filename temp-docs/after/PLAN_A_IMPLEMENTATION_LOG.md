@@ -124,8 +124,33 @@ best_option = min(valid_options, key=lambda x: x["fx_used"])
 
 ---
 
-## Step 5: Update Email Receipt to Include Provider ⏳ IN PROGRESS
+## Step 5: Update Email Receipt to Include Provider ✅ COMPLETE
 
 **Goal:** Add FX provider name to payment receipt emails
 **Time Estimate:** 15 min
+**Actual Time:** 5 min
+**Status:** ✅ Complete
+
+### 5.1 Modified `mail_service.py` ✅
+
+**Changes made:**
+1. **Added `fx_provider` parameter** (line 51)
+2. **Updated email body** (line 91)
+   ```
+   - Exchange Rate: 5.2192 BRL/USD (via Crebit)
+   ```
+
+### 5.2 Updated Email Call in `payments.py` ✅
+
+**Changes made:**
+- Added `fx_provider=fx_provider` parameter to send_payment_receipt_email() call (line 546)
+
+**Result:** Users now see which provider gave them the best rate!
+
+---
+
+## Step 6: Create Auto-Executor ⏳ IN PROGRESS
+
+**Goal:** Background task that auto-executes high-confidence payments
+**Time Estimate:** 1.5 hours
 **Status:** Starting now...
