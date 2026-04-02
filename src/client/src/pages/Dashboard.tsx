@@ -137,7 +137,7 @@ export default function Dashboard() {
       setIsSubmittingQuote(true);
       await apiClient.post("/fx/alerts", { username: user.username, email, target_rate: parsed });
       setTargetQuote("");
-    } catch { /* silent */ } finally { setIsSubmittingQuote(false); }
+    } catch { /* silent */ } finally { setIsSubmittingQuotBe(false); }
   }
 
   if (!isLoaded) return <div style={{ minHeight: "100vh", background: C.bg }} />;

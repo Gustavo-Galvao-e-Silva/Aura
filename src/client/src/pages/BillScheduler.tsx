@@ -7,6 +7,7 @@ import {
   Clock,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
+import MarketAnalysisCard from "../components/MarketAnalysisCard";
 import { useUser } from "@clerk/react-router";
 
 const C = {
@@ -27,6 +28,24 @@ type FilterType =
   | "predicted"
   | "confirmed";
 
+type MarketMetrics = {
+  selic_rate: number | null;
+  fed_funds_rate: number | null;
+  oil_price_usd: number | null;
+  fiscal_health_score: number | null;
+  geopolitical_risk_score: number | null;
+  political_stability_score: number | null;
+  fetched_at: string | null;
+};
+
+type MarketAnalysis = {
+  prediction: "BULLISH" | "BEARISH" | "NEUTRAL";
+  confidence: number;
+  thesis: string;
+  risk_flags: string[];
+  metrics: MarketMetrics;
+};
+
 type StatusResponse = {
   payment_decisions: PaymentDecision[];
   route_options: RouteOption[];
@@ -35,6 +54,7 @@ type StatusResponse = {
   current_fx_rate: number;
   pending_liabilities: unknown[];
   market_prediction: string;
+  market_analysis: MarketAnalysis | null;
   selected_route: string | null;
   audit_hash: string | null;
 };
@@ -57,7 +77,7 @@ type RouteOption = {
   eta_hours: number;
   is_instant: boolean;
   description: string;
-  brl_received: number;
+  brl_cost: number;
   reference_usd: number;
 };
 
@@ -350,6 +370,11 @@ export default function BillScheduler() {
                 {bestRoute?.description ?? "No route details available"}
               </p>
             </div>
+          </div>
+
+          {/* Market Analysis */}
+          <div className="px-4 pb-2 sm:px-6 lg:px-8">
+            <MarketAnalysisCard analysis={status?.market_analysis ?? undefined} />
           </div>
 
           {/* Tabs */}

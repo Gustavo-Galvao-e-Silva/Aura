@@ -106,9 +106,9 @@ class Settings(BaseSettings):
     # ============================================================================
 
     REF_AMOUNT_USD: float = 1000.0  # Reference amount for rate comparisons
-    WISE_FEE_USD: float = 18.0  # Wise transfer fee
-    REMITLY_FEE_USD: float = 0.0  # Remitly transfer fee (promotional)
-    CREBIT_FEE_USD: float = 0.0  # Crebit transfer fee (student-focused)
+    OFX_FEE_USD: float = 0.0       # OFX transfer fee (spread-based, no fixed fee)
+    REMITLY_FEE_USD: float = 0.0   # Remitly transfer fee (promotional)
+    CREBIT_FEE_USD: float = 0.0    # Crebit transfer fee (student-focused)
 
     # ============================================================================
     # Default Account Balances
