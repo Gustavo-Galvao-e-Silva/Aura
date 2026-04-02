@@ -158,6 +158,9 @@ def mint_mock_brz(user_public_key: str, amount_brl: float) -> Optional[str]:
         issuer_keypair = Keypair.from_secret(settings.STELLAR_SECRET_KEY)
         issuer_account = TESTNET_SERVER.load_account(issuer_keypair.public_key)
 
+        # Round to 7 decimal places (Stellar's maximum precision)
+        amount_brl_rounded = round(amount_brl, 7)
+
         transaction = (
             TransactionBuilder(
                 source_account=issuer_account,
@@ -167,7 +170,7 @@ def mint_mock_brz(user_public_key: str, amount_brl: float) -> Optional[str]:
             .append_payment_op(
                 destination=user_public_key,
                 asset=MOCK_BRZ_ASSET,
-                amount=str(amount_brl)
+                amount=f"{amount_brl_rounded:.7f}"  # Format with exactly 7 decimals
             )
             .set_timeout(settings.STELLAR_TRANSACTION_TIMEOUT)
             .build()

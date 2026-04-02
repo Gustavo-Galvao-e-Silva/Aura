@@ -401,12 +401,12 @@ function CountUp({ end, suffix = "" }: { end: number; suffix?: string }) {
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const FEATURES = [
-  { icon: TrendingUp, title: "Live FX Monitoring",          desc: "Real-time alerts across 150+ pairs. Time transfers for peak windows and save thousands on tuition." },
-  { icon: Calendar,   title: "Smart Bill Scheduling",       desc: "Automated scheduling for tuition, rent, and bills. Zero missed payments, full currency visibility." },
-  { icon: Waypoints,  title: "FX Route Optimizer",          desc: "AI scans Wise, Remitly, and Crebit in real time to route transfers through the cheapest path — up to 3% saved." },
-  { icon: Shield,     title: "Blockchain Audit Trail",      desc: "Every AI recommendation is SHA-256 hashed on Stellar testnet — cryptographically verifiable proof of reason." },
-  { icon: Zap,        title: "Stablecoin Payments",         desc: "Pay USD bills from BRL in seconds via USDC on Stellar. No SWIFT, no wait, no surprises." },
-  { icon: BarChart3,  title: "AI Market Signal",            desc: "Aura's LLM agent synthesises BCB, FRED, and commodity data into a BULLISH / BEARISH signal with thesis." },
+  { icon: TrendingUp, title: "Live FX Monitoring",          desc: "Real-time alerts across 150+ pairs. Time transfers for peak windows and save up to 3% on every transaction." },
+  { icon: Calendar,   title: "Smart Bill Scheduling",       desc: "Automated scheduling for tuition, rent, remittances, and recurring bills. Zero missed payments, full currency visibility." },
+  { icon: Waypoints,  title: "FX Route Optimizer",          desc: "AI scans Wise, Remitly, and Crebit in real time to route transfers through the cheapest path — up to 3% saved per transaction." },
+  { icon: Shield,     title: "Blockchain Audit Trail",      desc: "Every AI recommendation is SHA-256 hashed on Stellar testnet — cryptographically verifiable proof accessible to anyone, anywhere." },
+  { icon: Zap,        title: "Stablecoin Payments",         desc: "Pay bills across borders in seconds via USDC on Stellar. No SWIFT, no banks, no barriers — just fast, transparent settlement." },
+  { icon: BarChart3,  title: "AI Market Signal",            desc: "Aura's LLM agent synthesises BCB, FRED, and commodity data into a BULLISH / BEARISH signal — financial intelligence for all." },
 ];
 
 const STATS = [
@@ -602,7 +602,7 @@ export default function LandingPage() {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: C.rose }} />
                   <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.rose }} />
                 </span>
-                <ShinyText text="New — AI-powered FX & stablecoin payments" speed={3} color={C.rose} shineColor={C.cream} />
+                <ShinyText text="Financial inclusion through AI & blockchain" speed={3} color={C.rose} shineColor={C.cream} />
               </span>
             </motion.div>
 
@@ -621,7 +621,7 @@ export default function LandingPage() {
                   backgroundClip: "text",
                 }}
               >
-                Built for Students
+                Built for Everyone
               </span>
             </motion.h1>
 
@@ -631,7 +631,7 @@ export default function LandingPage() {
               className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed"
               style={{ color: C.muted }}
             >
-              Revellio tracks live FX rates, schedules your tuition payments, and routes every transfer through the cheapest path — so you save more without thinking about it.
+              Revellio tracks live FX rates, schedules cross-border payments, and routes every transfer through the cheapest path. Designed to scale for underbanked populations worldwide.
             </motion.p>
 
             {/* CTAs */}
@@ -749,14 +749,14 @@ export default function LandingPage() {
               Platform capabilities
             </span>
             <h2 className="mb-4 text-4xl font-black tracking-tight lg:text-5xl" style={{ color: C.cream }}>
-              Everything a student abroad needs,{" "}
+              Cross-border finance,{" "}
               <span style={{
                 background: `linear-gradient(135deg, ${C.rose}, ${C.cream})`,
                 WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
-              }}>in one place</span>
+              }}>accessible to all</span>
             </h2>
             <p className="mx-auto max-w-2xl text-lg" style={{ color: C.muted }}>
-              Built on live data from BCB, FRED, and Stellar — every recommendation is grounded in current market reality.
+              Built on live data from BCB, FRED, and Stellar. Designed for students, scalable to migrant workers, freelancers, and anyone managing cross-border payments globally.
             </p>
           </AnimatedContent>
 
@@ -787,6 +787,89 @@ export default function LandingPage() {
                 </SpotlightCard>
               </AnimatedContent>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Financial Inclusion ───────────────────────────────────────────── */}
+      <section className="py-28" style={{ borderTop: `1px solid ${C.border}`, background: `${C.maroon}` }}>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 items-center">
+            <AnimatedContent>
+              <span className="mb-4 block text-xs font-bold uppercase tracking-[0.2em]" style={{ color: C.rose }}>
+                Worldwide Financial Inclusion
+              </span>
+              <h2 className="mb-6 text-4xl font-black tracking-tight lg:text-5xl" style={{ color: C.cream }}>
+                Built for students today.{" "}
+                <span style={{
+                  background: `linear-gradient(135deg, ${C.rose}, ${C.cream})`,
+                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+                }}>Designed for everyone tomorrow.</span>
+              </h2>
+              <p className="mb-6 text-lg leading-relaxed" style={{ color: C.muted }}>
+                Revellio's infrastructure is built on open protocols: Stellar blockchain for settlements, AI-driven market intelligence, and transparent stablecoin rails. This architecture isn't just for students—it's designed to scale.
+              </p>
+              <div className="space-y-4">
+                {[
+                  { title: "Migrant Workers & Remittances", desc: "Send money home with minimal fees, AI-optimized timing, and transparent blockchain proof." },
+                  { title: "Freelancers & Global Contractors", desc: "Receive cross-border payments instantly via stablecoins, avoiding costly wire transfers and currency conversion fees." },
+                  { title: "Underbanked Populations", desc: "Access financial services without traditional banking infrastructure—just a phone and internet connection." },
+                  { title: "Small Businesses & Exporters", desc: "Optimize international payment timing, reduce FX risk, and maintain transparent audit trails for compliance." },
+                ].map((item, i) => (
+                  <AnimatedContent key={item.title} delay={0.1 + i * 0.08}>
+                    <div className="flex gap-4">
+                      <div className="shrink-0 mt-1">
+                        <div className="h-2 w-2 rounded-full" style={{ background: C.rose }} />
+                      </div>
+                      <div>
+                        <h3 className="mb-1 font-bold" style={{ color: C.cream }}>{item.title}</h3>
+                        <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{item.desc}</p>
+                      </div>
+                    </div>
+                  </AnimatedContent>
+                ))}
+              </div>
+            </AnimatedContent>
+
+            <AnimatedContent delay={0.2}>
+              <div
+                className="rounded-2xl p-8"
+                style={{
+                  background: `${C.cardBg}`,
+                  border: `1px solid ${C.border}`,
+                  backdropFilter: "blur(12px)",
+                }}
+              >
+                <h3 className="mb-6 text-2xl font-bold" style={{ color: C.cream }}>
+                  Scalable by Design
+                </h3>
+                <div className="space-y-6">
+                  {[
+                    { stat: "1.7B", label: "Unbanked adults globally", sub: "World Bank, 2021" },
+                    { stat: "$626B", label: "Annual remittance flows", sub: "Developing countries, 2022" },
+                    { stat: "6.5%", label: "Average remittance fee", sub: "Revellio targets <1%" },
+                  ].map((item, i) => (
+                    <AnimatedContent key={item.label} delay={0.3 + i * 0.1}>
+                      <div
+                        className="rounded-xl p-5"
+                        style={{ background: `${C.gray}22`, border: `1px solid ${C.border}` }}
+                      >
+                        <p className="mb-1 text-3xl font-black" style={{ color: C.rose }}>
+                          {item.stat}
+                        </p>
+                        <p className="mb-1 font-semibold" style={{ color: C.cream }}>{item.label}</p>
+                        <p className="text-xs" style={{ color: C.muted }}>{item.sub}</p>
+                      </div>
+                    </AnimatedContent>
+                  ))}
+                </div>
+                <div className="mt-8 rounded-xl p-5" style={{ background: `${C.rose}15`, border: `1px solid ${C.rose}30` }}>
+                  <p className="text-sm leading-relaxed" style={{ color: C.muted }}>
+                    <strong style={{ color: C.rose }}>The opportunity:</strong> By solving cross-border payments for students, Revellio builds the infrastructure to serve the 1.7 billion unbanked adults and $626B in annual remittances—democratizing access to fair, transparent financial services worldwide.
+                  </p>
+                </div>
+              </div>
+            </AnimatedContent>
           </div>
         </div>
       </section>
@@ -868,7 +951,7 @@ export default function LandingPage() {
                   }}>exchange table</span>
                 </h2>
                 <p className="mx-auto mb-10 max-w-xl text-lg" style={{ color: C.muted }}>
-                  Join international students who time transfers with AI signals and settle bills via stablecoin rails.
+                  Join international students, migrant workers, and global citizens who time transfers with AI signals and settle bills via stablecoin rails. Built for students today, designed to scale for underbanked populations worldwide.
                 </p>
                 <Magnet padding={80} magnetStrength={3}>
                   <a
@@ -895,7 +978,7 @@ export default function LandingPage() {
                 <span className="text-xl font-extrabold" style={{ color: C.cream }}>Revellio</span>
               </div>
               <p className="max-w-sm text-sm" style={{ color: C.muted }}>
-                AI-powered global finance for international students. Plan tuition, time FX conversions, and pay bills across borders with less stress.
+                AI-powered global finance for anyone managing cross-border payments. Built for students today, designed to scale for migrant workers, freelancers, and underbanked populations worldwide. Financial inclusion through technology.
               </p>
             </div>
             <div className="flex gap-3">
@@ -914,7 +997,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="pt-8 text-center text-xs" style={{ borderTop: `1px solid ${C.border}`, color: `${C.muted}` }}>
-            © {new Date().getFullYear()} Revellio. Built for international students.
+            © {new Date().getFullYear()} Revellio. Built for students, designed for worldwide financial inclusion.
           </div>
         </div>
       </footer>

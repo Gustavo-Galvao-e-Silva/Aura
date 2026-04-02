@@ -5,10 +5,19 @@ import {
   ScrollText,
   Wallet,
   ShieldCheck,
+  LogOut,
 } from "lucide-react";
+import { useClerk } from "@clerk/react";
 import MenuButton from "./MenuButton";
 
 export default function Navbar() {
+  const { signOut } = useClerk();
+
+  const handleSignOut = async () => {
+    await signOut();
+    window.location.href = "/";
+  };
+
   return (
     <aside
       className="hidden w-60 shrink-0 flex-col md:flex"
@@ -28,7 +37,7 @@ export default function Navbar() {
             className="text-[11px]"
             style={{ color: "rgba(220,215,201,0.45)" }}
           >
-            Student Finance
+            Global Finance
           </p>
         </div>
       </div>
@@ -66,6 +75,29 @@ export default function Navbar() {
           Icon={<ShieldCheck size={18} />}
         />
       </nav>
+
+      {/* Sign Out */}
+      <div className="px-3 pb-4 pt-2">
+        <button
+          onClick={handleSignOut}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
+          style={{
+            color: "rgba(220,215,201,0.72)",
+            background: "transparent",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(162,123,92,0.15)";
+            e.currentTarget.style.color = "#A27B5C";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "rgba(220,215,201,0.72)";
+          }}
+        >
+          <LogOut size={18} />
+          <span>Sign Out</span>
+        </button>
+      </div>
     </aside>
   );
 }

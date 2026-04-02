@@ -51,17 +51,19 @@ def send_payment_receipt_email(
     fx_rate: float,
     fx_provider: str,
     stellar_mint_tx: str,
-    stellar_swap_tx: str,
+    swap_result: dict,  # Changed from stellar_swap_tx: str
     transaction_id: int,
+    circle_transfer_id: str = None,  # NEW: Circle off-ramp transfer ID
 ):
     """
-    Send payment receipt email with blockchain proof.
+    Send payment receipt email with full pipeline proof.
 
     Includes:
     - Bill details (name, amount)
     - Exchange rate used (with provider name)
     - BRL spent
     - Stellar transaction IDs (blockchain proof)
+    - Circle wire transfer ID (off-ramp proof)
     - Database transaction ID
     """
     smtp_host = settings.SMTP_HOST
@@ -78,7 +80,21 @@ def send_payment_receipt_email(
 
     # Build blockchain explorer links
     mint_link = f"https://stellar.expert/explorer/testnet/tx/{stellar_mint_tx}"
-    swap_link = f"https://stellar.expert/explorer/testnet/tx/{stellar_swap_tx}"
+
+    # Smart swap link - handle mock vs real transactions
+    if swap_result.get("is_mock"):
+        swap_link = f"[SIMULATED] Mock Transaction ID: {swap_result.get('tx_id', '')[:20]}..."
+    else:
+        swap_link = f"https://stellar.expert/explorer/testnet/tx/{swap_result.get('tx_id')}"
+
+    # Build Circle off-ramp section
+    circle_section = ""
+    if circle_transfer_id:
+        circle_section = f"""
+✅ Step 3 - USD Wire Transfer (Circle Off-Ramp):
+   Transfer ID: {circle_transfer_id}
+   Status: Pending (Simulation)
+"""
 
     body = f"""
 Hello @{username},
@@ -91,13 +107,13 @@ PAYMENT DETAILS:
 - BRL Spent: R${amount_brl_spent:.2f}
 - Exchange Rate: {fx_rate:.4f} BRL/USD (via {fx_provider})
 
-BLOCKCHAIN PROOF:
+BLOCKCHAIN & SETTLEMENT PROOF:
 ✅ Step 1 - Mock-BRZ Mint:
    {mint_link}
 
 ✅ Step 2 - USDC Swap:
    {swap_link}
-
+{circle_section}
 DATABASE TRANSACTION ID: {transaction_id}
 
 This payment is now complete and your bill has been marked as paid.

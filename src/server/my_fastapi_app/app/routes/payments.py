@@ -25,6 +25,7 @@ from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.services.mail_service import send_payment_receipt_email
 from my_fastapi_app.app.services.fx_service import get_best_fx_rate, calculate_brl_needed
 from tools.stellar_tools import ensure_account_exists, establish_trustline, mint_mock_brz, swap_brz_to_usdc, MOCK_BRZ_ASSET, USDC_ASSET
+from tools.circle_tools import initiate_usdc_withdrawal
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -87,6 +88,7 @@ class SettlementResponse(BaseModel):
     stellar_mint_tx: Optional[str]
     stellar_swap_tx: Optional[str]
     database_transaction_id: int
+    circle_transfer_id: Optional[str] = None  # NEW: Circle off-ramp transfer ID
 
     # Updated wallet balances
     new_balance_brl: float
@@ -348,9 +350,11 @@ async def settle_payment(
     4. Create ephemeral Stellar account for user
     5. Mint Mock-BRZ to Stellar account (BRL → stablecoin on blockchain)
     6. Swap Mock-BRZ → USDC on Stellar testnet (or mock mode for MVP)
+    6.5. Initiate Circle wire transfer (USDC → USD off-ramp, POC mode)
     7. Update database: debit BRL from wallet, mark liability as paid
     8. Create immutable transaction record with blockchain proof
-    9. Return complete audit trail with all transaction IDs
+    9. Send email receipt with full pipeline proof
+    10. Return complete audit trail with all transaction IDs
 
     This connects Web2 (Stripe/database) with Web2.5 (blockchain proof layer).
     """
@@ -481,6 +485,36 @@ async def settle_payment(
     print(f"      TX: {stellar_swap_tx[:10]}...")
 
     # ========================================================================
+    # Step 6.5: Circle Off-Ramp - USDC → USD Wire Transfer (POC)
+    # ========================================================================
+    print(f"   💸 Initiating Circle wire transfer for ${amount_usdc_received:.2f} USDC...")
+
+    circle_transfer_id = None
+    try:
+        circle_result = await initiate_usdc_withdrawal(
+            amount_usd=amount_usdc_received,
+            recipient_bank_account={
+                "account_number": "000123456789",  # POC: hardcoded test account
+                "routing_number": "021000021",      # POC: Federal Reserve Bank routing
+                "bank_name": "Test University Bank",
+                "account_holder_name": liability.name  # Use liability name as beneficiary
+            },
+            user_metadata={
+                "username": payment.username,
+                "liability_id": str(payment.liability_id)
+            }
+        )
+
+        if circle_result:
+            circle_transfer_id = circle_result.get("transfer_id", "UNKNOWN")
+            print(f"   ✅ Circle transfer initiated: {circle_transfer_id}")
+        else:
+            print(f"   ⚠️  Circle transfer failed (non-fatal for POC)")
+    except Exception as e:
+        print(f"   ⚠️  Circle off-ramp error (non-fatal for POC): {e}")
+        # For POC: continue even if Circle fails - just log it
+
+    # ========================================================================
     # Step 7: Update database - debit BRL, mark liability as paid
     # ========================================================================
     print(f"   💾 Updating database...")
@@ -545,8 +579,9 @@ async def settle_payment(
             fx_rate=fx_rate,
             fx_provider=fx_provider,
             stellar_mint_tx=stellar_mint_tx,
-            stellar_swap_tx=stellar_swap_tx,
-            transaction_id=tx.id
+            swap_result=swap_result,  # Changed: pass full dict instead of just tx_id
+            transaction_id=tx.id,
+            circle_transfer_id=circle_transfer_id  # NEW: Circle off-ramp proof
         )
     except Exception as e:
         print(f"   ⚠️  Email sending failed (non-fatal): {e}")
@@ -557,7 +592,7 @@ async def settle_payment(
     # ========================================================================
     return SettlementResponse(
         status="success",
-        message=f"Successfully paid {liability.name} using stablecoin flow",
+        message=f"Successfully paid {liability.name} using stablecoin flow (with Circle off-ramp POC)",
         liability_id=liability.id,
         liability_name=liability.name,
         amount_usd=amount_usd,
@@ -567,5 +602,6 @@ async def settle_payment(
         stellar_swap_tx=stellar_swap_tx,
         database_transaction_id=tx.id,
         new_balance_brl=wallet.brl_available,
-        new_balance_usd=wallet.usd_available
+        new_balance_usd=wallet.usd_available,
+        circle_transfer_id=circle_transfer_id  # NEW: Circle off-ramp proof
     )
