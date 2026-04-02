@@ -49,6 +49,7 @@ def send_payment_receipt_email(
     amount_usd: float,
     amount_brl_spent: float,
     fx_rate: float,
+    fx_provider: str,
     stellar_mint_tx: str,
     stellar_swap_tx: str,
     transaction_id: int,
@@ -58,7 +59,7 @@ def send_payment_receipt_email(
 
     Includes:
     - Bill details (name, amount)
-    - Exchange rate used
+    - Exchange rate used (with provider name)
     - BRL spent
     - Stellar transaction IDs (blockchain proof)
     - Database transaction ID
@@ -88,7 +89,7 @@ PAYMENT DETAILS:
 - Bill: {liability_name}
 - Amount: ${amount_usd:.2f} USD
 - BRL Spent: R${amount_brl_spent:.2f}
-- Exchange Rate: {fx_rate:.2f} BRL/USD
+- Exchange Rate: {fx_rate:.4f} BRL/USD (via {fx_provider})
 
 BLOCKCHAIN PROOF:
 ✅ Step 1 - Mock-BRZ Mint:

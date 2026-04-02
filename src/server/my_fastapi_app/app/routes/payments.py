@@ -543,6 +543,7 @@ async def settle_payment(
             amount_usd=amount_usd,
             amount_brl_spent=amount_brl_needed,
             fx_rate=fx_rate,
+            fx_provider=fx_provider,
             stellar_mint_tx=stellar_mint_tx,
             stellar_swap_tx=stellar_swap_tx,
             transaction_id=tx.id
