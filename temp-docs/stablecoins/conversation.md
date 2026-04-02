@@ -385,11 +385,11 @@ claude on  semantic-checkpoint via ❄️  impure (devenv-shell-env)
 │   │   ├── package.json
 │   │   ├── package-lock.json
 │   │   ├── public
-│   │   │   ├── crebit-logo.png
-│   │   │   ├── logo.png
-│   │   │   ├── remitly-logo.png
+│   │   │   ├── crebit-logo_v1.png
+│   │   │   ├── logo_v1.png
+│   │   │   ├── remitly-logo_v1.png
 │   │   │   ├── vite.svg
-│   │   │   └── wise-logo.png
+│   │   │   └── wise-logo_v1.png
 │   │   ├── README.md
 │   │   ├── src
 │   │   │   ├── API
