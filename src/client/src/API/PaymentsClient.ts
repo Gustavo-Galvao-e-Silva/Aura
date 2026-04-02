@@ -41,11 +41,11 @@ export async function getTransactionHistory(
 
 export async function createCheckoutSession(
   username: string,
-  amountUsd: number,
+  amountBrl: number,
 ): Promise<{ checkout_url: string; session_id: string }> {
   const res = await apiClient.post("/payments/checkout", {
     username,
-    amount_usd: amountUsd,
+    amount_brl: amountBrl,
   });
   return res.data;
 }
