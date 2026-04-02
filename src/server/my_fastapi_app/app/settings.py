@@ -122,6 +122,7 @@ class Settings(BaseSettings):
     # ============================================================================
 
     MARKET_MONITOR_INTERVAL_SECONDS: int = 60  # How often to run the market monitor loop
+    API_BASE_URL: str = "http://localhost:8000"  # Base URL for internal API calls (used by auto-executor)
 
     # ============================================================================
     # CORS Settings
