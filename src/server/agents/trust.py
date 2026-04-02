@@ -1,12 +1,182 @@
 import hashlib
+import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from stellar_sdk import Server, Keypair, TransactionBuilder, Network, Asset
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from agents.state import AuraState
 from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.db.session import AsyncSessionLocal
 from db.models import AuditLog
 from tools.embeddings import generate_reasoning_embedding
+from google import genai
+from pydantic import BaseModel
+
+
+class ContradictionVerification(BaseModel):
+    """LLM output for contradiction verification."""
+    is_contradictory: bool
+    explanation: str
+
+async def verify_contradiction_with_llm(
+    reasoning_a: str,
+    reasoning_b: str,
+    timestamp_a: str,
+    timestamp_b: str
+) -> dict:
+    """
+    Use LLM to determine if two decisions are actually contradictory.
+    Enhanced to understand that changing opinions over time is valid.
+    """
+    prompt = f"""You are analyzing AI decision consistency for a financial assistant.
+
+Decision A (made at {timestamp_a}):
+{reasoning_a}
+
+Decision B (made at {timestamp_b}):
+{reasoning_b}
+
+Task: Determine if these decisions are CONTRADICTORY.
+
+CRITICAL RULES FOR CONTRADICTION DETECTION:
+1. A contradiction ONLY exists if the AI makes opposite recommendations under the EXACT SAME market conditions (e.g., processed in the same exact batch).
+2. The AI is ALLOWED to "change its mind" over time. If the decisions are spaced apart, or if Decision B clearly references new developments, updated trends, or a shift in the market compared to A, this is NOT a contradiction. It is adapting to new data.
+3. A true contradiction is when the AI is confused: evaluating the same data but giving conflicting outputs (e.g., "bullish so pay" vs "bullish so wait").
+4. NOT a contradiction if: both recommend the same overall strategy, differences are just nuanced details, or they describe the same decision in different words.
+
+Answer with:
+1. is_contradictory: true or false
+2. explanation: 1-2 sentences explaining why they are/aren't contradictory. If they aren't because the AI adapted to new info, explicitly state that.
+"""
+
+    try:
+        gemini_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+
+        response = gemini_client.models.generate_content(
+            model="gemini-3.1-flash-lite-preview",
+            contents=[prompt],
+            config=genai.types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ContradictionVerification
+            )
+        )
+
+        if response and response.text:
+            result = json.loads(response.text)
+            return {
+                "is_contradictory": result.get("is_contradictory", False),
+                "explanation": result.get("explanation", "No explanation provided")
+            }
+
+        return {"is_contradictory": False, "explanation": "LLM verification failed"}
+
+    except Exception as e:
+        print(f"⚠️ LLM contradiction verification failed: {e}")
+        return {"is_contradictory": False, "explanation": f"Verification error: {e}"}
+
+async def check_recent_contradictions(
+    db: AsyncSession,
+    lookback_days: int = 30,
+    min_similarity: float = 0.80,
+    use_llm_verification: bool = True
+) -> list:
+    """
+    Check for contradictions in recent AI decisions using LLM verification.
+    Uses temporal filtering to only compare decisions made in the same cycle.
+    """
+    try:
+        # Step 1: Get candidate pairs based on high similarity AND temporal proximity (within 10 mins)
+        candidate_query = text("""
+            WITH recent_decisions AS (
+                SELECT 
+                    id,
+                    timestamp,
+                    reasoning,
+                    decision_hash,
+                    reasoning_embedding
+                FROM audit_log
+                WHERE reasoning_embedding IS NOT NULL
+                AND timestamp >= NOW() - (:days * INTERVAL '1 day')
+            )
+            SELECT 
+                a.id as id_a,
+                a.timestamp as timestamp_a,
+                a.reasoning as reasoning_a,
+                b.id as id_b,
+                b.timestamp as timestamp_b,
+                b.reasoning as reasoning_b,
+                1 - (a.reasoning_embedding <=> b.reasoning_embedding) as similarity
+            FROM recent_decisions a
+            CROSS JOIN recent_decisions b
+            WHERE a.id < b.id 
+            AND 1 - (a.reasoning_embedding <=> b.reasoning_embedding) >= :min_similarity
+            -- HYBRID FIX: Only compare decisions made within 10 minutes of each other (600 seconds)
+            -- This ensures we are comparing decisions from the same research cycle!
+            AND ABS(EXTRACT(EPOCH FROM (a.timestamp - b.timestamp))) <= 600
+            ORDER BY similarity DESC
+            LIMIT 20
+        """)
+
+        result = await db.execute(
+            candidate_query, 
+            {"min_similarity": min_similarity, "days": lookback_days}
+        )
+        candidates = result.fetchall()
+
+        if not candidates:
+            return []
+
+        # Step 2: Use LLM to verify which candidates are ACTUALLY contradictory
+        verified_contradictions = []
+
+        # 🚀 FIX: Cap verification to the top 3 candidates to save API quota!
+        # Since this runs every 60s, we don't need to check 20 pairs at once.
+        candidates_to_verify = candidates[:3]
+
+        for i, row in enumerate(candidates_to_verify):
+            if use_llm_verification:
+                # 🚀 FIX: Add a 2.5-second delay between LLM calls to prevent 429 Burst Limits
+                if i > 0:
+                    await asyncio.sleep(2.5)
+
+                verification = await verify_contradiction_with_llm(
+                    reasoning_a=row.reasoning_a,
+                    reasoning_b=row.reasoning_b,
+                    timestamp_a=row.timestamp_a.isoformat(),
+                    timestamp_b=row.timestamp_b.isoformat()
+                )
+
+                if verification["is_contradictory"]:
+                    verified_contradictions.append({
+                        "id_a": row.id_a,
+                        "id_b": row.id_b,
+                        "similarity": float(row.similarity),
+                        "reasoning_a": row.reasoning_a,
+                        "reasoning_b": row.reasoning_b,
+                        "timestamp_a": row.timestamp_a.isoformat(),
+                        "timestamp_b": row.timestamp_b.isoformat(),
+                        "explanation": verification["explanation"]
+                    })
+                    print(f"   ✓ Verified contradiction: IDs {row.id_a} vs {row.id_b} ({row.similarity:.0%} similar)")
+                    print(f"     Reason: {verification['explanation']}")
+            else:
+                # Fallback: just return all candidates without verification
+                verified_contradictions.append({
+                    "id_a": row.id_a,
+                    "id_b": row.id_b,
+                    "similarity": float(row.similarity),
+                    "reasoning_a": row.reasoning_a,
+                    "reasoning_b": row.reasoning_b,
+                    "timestamp_a": row.timestamp_a.isoformat(),
+                    "timestamp_b": row.timestamp_b.isoformat(),
+                })
+
+        return verified_contradictions
+
+    except Exception as e:
+        print(f"⚠️ Contradiction check failed: {e}")
+        return []
 
 async def trust_engine_node(state: AuraState):
     """
@@ -126,4 +296,56 @@ async def trust_engine_node(state: AuraState):
             print(f"⚠️ Database Error: {e}")
             await db.rollback()
 
-        return {"audit_hash": audit_hash, "payment_decisions": updated_decisions}
+        # 6. Self-Correcting Monitoring: Check for contradictions with LLM verification
+        contradiction_metrics = {"count": 0, "last_checked": None}
+        abort_execution = False
+        abort_reason = None
+
+        try:
+            print("🔍 Checking for contradictions (LLM-verified)...")
+            contradictions = await check_recent_contradictions(
+                db,
+                lookback_days=30,
+                min_similarity=0.80,  # Higher threshold for monitoring (80% vs 75% for UI)
+                use_llm_verification=True  # Use LLM to verify contradictions
+            )
+
+            contradiction_count = len(contradictions)
+            contradiction_metrics = {
+                "count": contradiction_count,
+                "last_checked": datetime.now(timezone.utc).isoformat(),
+                "threshold": 0.80,
+                "lookback_days": 30,
+                "verified_by_llm": True
+            }
+
+            if contradiction_count > 0:
+                print(f"⚠️  GOVERNANCE ALERT: {contradiction_count} VERIFIED contradiction(s) detected!")
+
+                # ABORT EXECUTION if contradictions found
+                # This forces Aura to re-research on the next heartbeat
+                abort_execution = True
+                abort_reason = f"Detected {contradiction_count} contradictory decision(s) in recent history. Aborting execution to avoid inconsistent behavior. Will re-research on next heartbeat (60s)."
+
+                print(f"🛑 EXECUTION ABORTED: {abort_reason}")
+                print(f"   Next heartbeat will re-gather market intelligence and try again.")
+
+                # Log details of contradictions
+                for i, c in enumerate(contradictions[:3], 1):
+                    print(f"   #{i}: {c['similarity']:.0%} similarity - IDs {c['id_a']} vs {c['id_b']}")
+                    print(f"       {c.get('explanation', 'No explanation')}")
+
+            else:
+                print(f"✅ Consistency Check: No verified contradictions detected")
+
+        except Exception as e:
+            print(f"⚠️ Contradiction monitoring failed: {e}")
+            # Don't abort on monitoring failure - allow execution to continue
+
+        return {
+            "audit_hash": audit_hash,
+            "payment_decisions": updated_decisions,
+            "contradiction_metrics": contradiction_metrics,
+            "abort_execution": abort_execution,
+            "abort_reason": abort_reason
+        }
