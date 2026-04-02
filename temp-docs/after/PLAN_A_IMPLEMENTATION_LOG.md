@@ -149,51 +149,75 @@ best_option = min(valid_options, key=lambda x: x["fx_used"])
 
 ---
 
-## Step 6: Create Auto-Executor ✅ COMPLETE
+## Step 6: Create Auto-Executor ✅ COMPLETE (REFACTORED)
 
-**Goal:** Background task that auto-executes high-confidence payments
+**Goal:** Auto-execute high-confidence payments as part of agent workflow
 **Time Estimate:** 1.5 hours
-**Actual Time:** 20 min
+**Actual Time:** 30 min (including refactor)
 **Status:** ✅ Complete
 
 ### 6.1 Created `auto_executor.py` ✅
 
 **Location:** `src/server/agents/auto_executor.py`
 
+**Architecture:** Graph node (not separate background task)
+
 **Key Features:**
 - **Confidence threshold:** 90% (AUTO_EXECUTE_CONFIDENCE_THRESHOLD = 0.9)
-- **Check interval:** Every 15 minutes (900 seconds)
+- **Runs as part of Aura graph workflow** (every 60s with heartbeat)
 - **Logic:**
-  - Reads current state from agent system
+  - Receives state from orchestrator
   - Filters for decisions with `pay=true` AND `market_confidence ≥ 0.9`
   - Auto-executes payment via `/payments/settle` endpoint
   - Handles "already paid" errors gracefully
-  - Logs all decisions and results
+  - Returns execution results to state
 
 **Functions:**
 - `execute_payment(liability_id, username)` - Calls settlement endpoint
-- `auto_executor_loop()` - Main background task loop
+- `auto_executor_node(state)` - Graph node (receives AuraState, returns dict)
 
-### 6.2 Added Settings ✅
+### 6.2 Updated State Schema ✅
+
+**File:** `src/server/agents/state.py` (line 83)
+```python
+auto_executor_results: List[dict]  # {liability_id, username, status, transaction_id}
+```
+
+**File:** `src/server/my_fastapi_app/app/state.py` (line 16)
+```python
+"auto_executor_results": []
+```
+
+### 6.3 Integrated into Graph Workflow ✅
+
+**File:** `src/server/agents/aura_graph.py`
+
+**Changes:**
+1. **Import auto_executor_node** (line 7)
+2. **Add node to workflow** (line 48)
+   ```python
+   workflow.add_node("auto_executor", auto_executor_node)
+   ```
+3. **Update flow** (line 64-65)
+   ```
+   orchestrator → auto_executor → trust_engine → END
+   ```
+
+### 6.4 Added Settings ✅
 
 **File:** `src/server/my_fastapi_app/app/settings.py` (line 125)
 ```python
 API_BASE_URL: str = "http://localhost:8000"
 ```
 
-### 6.3 Integrated into FastAPI ✅
+**Result:** Auto-executor now runs as part of the Aura agent graph!
 
-**File:** `src/server/my_fastapi_app/app/main.py`
-
-**Changes:**
-1. **Import auto_executor_loop** (line 13)
-2. **Start background task** (line 48)
-   ```python
-   auto_executor_task = asyncio.create_task(auto_executor_loop())
-   ```
-3. **Cancel on shutdown** (line 57-61)
-
-**Result:** Auto-executor now runs alongside market monitor!
+**Flow:**
+```
+Market Monitor (60s) → Aura Graph:
+  researchers → synthesis → router → orchestrator
+    → auto_executor (NEW!) → trust_engine → END
+```
 
 ---
 
@@ -233,21 +257,26 @@ API_BASE_URL: str = "http://localhost:8000"
 
 **Steps:**
 1. Create urgent liability (due in ≤3 days) OR wait for strong BULLISH signal
-2. Wait for market monitor to run (every 60s)
-3. Wait for auto-executor to run (every 15 min)
-4. Check logs for auto-execution
+2. Wait for market monitor to run (every 60s) - auto-executor runs as part of workflow
+3. Check logs for auto-execution
 
 **Expected output in logs:**
 ```
+🎖️ Orchestrator: Market = BULLISH (confidence: 95%)
+...
 🤖 Auto-Executor: Checking for high-confidence payments...
    🎯 Found 1 high-confidence payment(s) to execute:
 
-   ▶️  Executing: Rent (for @testuser)
+   ▶️  Executing: Rent ($100.00) for @testuser
       Liability ID: 123
       Confidence: 95%
       Reason: URGENT: Due in 2 days, paying to avoid penalties.
       ✅ Success! Transaction ID: 456
+
+✅ Auto-Executor: Processed 1 high-confidence payments
 ```
+
+**Note:** Auto-executor now runs every 60s (as part of graph heartbeat) instead of every 15 min!
 
 #### 7.4 Test Rate Comparison (User to test)
 **Steps:**
@@ -277,12 +306,39 @@ Available options: 3
 - ✅ Step 5: Email provider name (5 min)
 - ✅ Step 6: Auto-executor (20 min)
 
-**Total Time:** ~55 min (vs. estimated 3h 20min)
+**Total Time:** ~60 min (vs. estimated 3h 20min)
 
 **What Changed:**
 - Skipped Step 2 (teammate hasn't created components yet)
 - Can integrate widgets later when ready
+- **REFACTORED:** Auto-executor is now a graph node (not separate background task)
 - All backend work complete and ready to test
+
+**Architecture Benefits of Refactor:**
+- ✅ Auto-executor runs every 60s (faster response time vs. 15 min)
+- ✅ All agent logic in one workflow (cleaner architecture)
+- ✅ State flows naturally through graph nodes
+- ✅ Execution results tracked in state for visibility
+- ✅ Trust engine can hash auto-executor results to blockchain
+
+**New Flow:**
+```
+Heartbeat (60s) → Aura Graph:
+  START
+    ├→ researchers (parallel)
+    ↓
+  synthesis (market analysis)
+    ↓
+  smart_router (FX rates)
+    ↓
+  orchestrator (pay/wait decisions)
+    ↓
+  auto_executor (execute high-confidence) ← NEW!
+    ↓
+  trust_engine (blockchain proof)
+    ↓
+  END
+```
 
 **Next Steps:**
 1. User tests Steps 7.2-7.4
