@@ -89,8 +89,43 @@ best_option = min(valid_options, key=lambda x: x["fx_used"])
 
 ---
 
-## Step 4: Update Settlement to Use Real-Time Rate ⏳ IN PROGRESS
+## Step 4: Update Settlement to Use Real-Time Rate ✅ COMPLETE
 
 **Goal:** Replace hardcoded `fx_rate = 5.5` with live rate from FX service
 **Time Estimate:** 20 min
+**Actual Time:** 5 min
+**Status:** ✅ Complete
+
+### 4.1 Modified `payments.py` ✅
+
+**Changes made:**
+1. **Import FX service** (line 25)
+   ```python
+   from my_fastapi_app.app.services.fx_service import get_best_fx_rate, calculate_brl_needed
+   ```
+
+2. **Replace hardcoded rate** (line 396-404)
+   ```python
+   # Before: fx_rate = 5.5
+   # After:
+   fx_result = await get_best_fx_rate(payment.username)
+   fx_rate = fx_result["fx_rate"]
+   fx_provider = fx_result["provider"]
+   fx_source = fx_result["source"]
+   ```
+
+3. **Store provider in metadata** (line 513-514)
+   ```python
+   "fx_provider": fx_provider,  # e.g., "Crebit"
+   "fx_source": fx_source,      # "live" or "fallback"
+   ```
+
+**Result:** Settlement now uses real-time rates from Crebit/Wise/Remitly instead of hardcoded 5.5!
+
+---
+
+## Step 5: Update Email Receipt to Include Provider ⏳ IN PROGRESS
+
+**Goal:** Add FX provider name to payment receipt emails
+**Time Estimate:** 15 min
 **Status:** Starting now...
