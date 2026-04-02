@@ -95,7 +95,7 @@ export default function Dashboard() {
     (async () => {
       try {
         setExpensesLoading(true);
-        const res = await apiClient.get(`/expenses/user/${user!.username}`, { params: { filter_by: "upcoming", limit: 3 } });
+        const res = await apiClient.get(`/expenses/user/${user!.username}`, { params: { filter_by: "upcoming", limit: 6 } });
         setUpcomingExpenses(res.data["user-expenses"] ?? []);
       } catch { /* silent */ } finally { setExpensesLoading(false); }
     })();
@@ -149,7 +149,6 @@ export default function Dashboard() {
 
   const schedulerBillsCount = dashboardSummary?.count ?? 0;
   const nextLiability       = dashboardSummary?.next_liability ?? null;
-
   function getCategoryIcon(category: string | null) {
     switch (category) {
       case "Education": return <School  size={18} />;
@@ -185,7 +184,7 @@ export default function Dashboard() {
 
         {/* Top bar */}
         <header
-          className="flex h-16 shrink-0 items-center justify-between px-8"
+          className="flex h-12 shrink-0 items-center justify-between px-4 sm:px-5 lg:px-6"
           style={{ borderBottom: `1px solid ${C.border}` }}
         >
           <h2 className="text-lg font-bold" style={{ color: C.cream }}>Dashboard</h2>
@@ -209,30 +208,30 @@ export default function Dashboard() {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl space-y-8 p-8">
+          <div className="w-full space-y-3 p-3 sm:p-4 lg:p-5">
 
             {/* Stat cards */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
 
               {/* Scheduled bills */}
-              <div className="rounded-2xl p-6" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+              <div className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Scheduled Bills</p>
-                <p className="text-4xl font-black" style={{ color: C.cream }}>
+                <p className="text-3xl font-black" style={{ color: C.cream }}>
                   {dashboardSummaryLoading ? "—" : schedulerBillsCount}
                 </p>
-                <div className="mt-4 flex items-center gap-1.5 text-sm font-medium" style={{ color: "#34d399" }}>
+                <div className="mt-3 flex items-center gap-1.5 text-sm font-medium" style={{ color: "#34d399" }}>
                   <TrendingUp size={14} />
                   <span>Unpaid confirmed expenses</span>
                 </div>
               </div>
 
               {/* Next payment */}
-              <div className="rounded-2xl p-6" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+              <div className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Next Payment Due</p>
-                <p className="text-4xl font-black" style={{ color: C.cream }}>
+                <p className="text-3xl font-black" style={{ color: C.cream }}>
                   {dashboardSummaryLoading ? "—" : nextLiability ? formatDate(nextLiability.due_date) : "None"}
                 </p>
-                <div className="mt-4 flex items-center gap-1.5 text-sm font-medium" style={{ color: C.rose }}>
+                <div className="mt-3 flex items-center gap-1.5 text-sm font-medium" style={{ color: C.rose }}>
                   <Clock size={14} />
                   <span>
                     {dashboardSummaryLoading ? "Loading..." : nextLiability
@@ -243,18 +242,18 @@ export default function Dashboard() {
               </div>
 
               {/* Rate alert */}
-              <div className="rounded-2xl p-6" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+              <div className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Set Rate Alert</p>
                 <input
                   value={targetQuote}
                   onChange={e => setTargetQuote(e.target.value)}
-                  className="mt-1 w-full rounded-xl bg-transparent px-0 text-3xl font-black outline-none placeholder:opacity-30"
+                  className="mt-1 w-full rounded-xl bg-transparent px-0 text-2xl font-black outline-none placeholder:opacity-30"
                   style={{ color: C.cream, caretColor: C.rose }}
                   placeholder="5.0000"
                   type="number"
                   step="0.0001"
                 />
-                <div className="mt-4">
+                <div className="mt-3">
                   <button
                     onClick={handleSubmitQuoteAlert}
                     disabled={isSubmittingQuote}
@@ -268,10 +267,10 @@ export default function Dashboard() {
             </div>
 
             {/* Bottom grid */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
 
               {/* Upcoming expenses */}
-              <div className="flex flex-col gap-4 lg:col-span-1">
+              <div className="flex flex-col gap-2 lg:col-span-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-base font-bold" style={{ color: C.cream }}>Upcoming Expenses</h4>
                   <Link className="text-xs font-semibold transition-colors" style={{ color: C.rose }} to="/expenses">
@@ -279,19 +278,19 @@ export default function Dashboard() {
                   </Link>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {expensesLoading ? (
-                    <div className="rounded-2xl p-4 text-sm" style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted }}>
+                    <div className="rounded-2xl p-3 text-sm" style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted }}>
                       Loading…
                     </div>
                   ) : upcomingExpenses.length === 0 ? (
-                    <div className="rounded-2xl p-4 text-sm" style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted }}>
+                    <div className="rounded-2xl p-3 text-sm" style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted }}>
                       No upcoming expenses.
                     </div>
                   ) : upcomingExpenses.map(expense => (
-                    <div key={expense.id} className="flex items-center gap-4 rounded-2xl p-4"
+                    <div key={expense.id} className="flex items-center gap-3 rounded-2xl p-3"
                       style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
                         style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}>
                         {getCategoryIcon(expense.category)}
                       </div>
@@ -309,12 +308,12 @@ export default function Dashboard() {
               </div>
 
               {/* FX chart */}
-              <div className="flex flex-col gap-4 lg:col-span-2">
+              <div className="flex flex-col gap-2 lg:col-span-8">
                 <div className="flex items-center justify-between">
                   <h4 className="text-base font-bold" style={{ color: C.cream }}>Market Watch — USD / BRL</h4>
                 </div>
 
-                <div className="flex flex-col rounded-2xl p-6" style={{ background: C.surface, border: `1px solid ${C.border}`, minHeight: 300 }}>
+                <div className="flex flex-col rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}`, minHeight: 220 }}>
                   {fxLoading ? (
                     <div className="flex flex-1 items-center justify-center text-sm" style={{ color: C.muted }}>
                       Loading FX data…
@@ -322,10 +321,10 @@ export default function Dashboard() {
                   ) : (
                     <>
                       {/* Rate + change */}
-                      <div className="mb-6 flex items-center gap-6">
+                      <div className="mb-3 flex items-center gap-4">
                         <div>
                           <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Rate</p>
-                          <p className="text-3xl font-black" style={{ color: C.cream }}>
+                          <p className="text-2xl font-black" style={{ color: C.cream }}>
                             {latestRate?.toFixed(4) ?? "—"}
                             <span className="ml-1.5 text-sm font-normal" style={{ color: C.muted }}>BRL</span>
                           </p>
@@ -342,7 +341,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* Recharts area chart */}
-                      <div className="flex-1" style={{ minHeight: 180 }}>
+                      <div className="flex-1" style={{ minHeight: 135 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={fxSeries} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                             <defs>

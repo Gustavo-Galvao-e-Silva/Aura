@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Navbar from "../components/Navbar";
 import {
   ShieldCheck,
@@ -46,6 +46,29 @@ type TrustDecision = {
   due_date: string;
 };
 
+type VerificationResponse = {
+  status: string;
+  timestamp: string;
+  reasoning: string;
+  audit_hash: string;
+  stellar_tx_id: string | null;
+  ledger_url: string;
+  message: string;
+};
+
+type AuditLogListItem = {
+  audit_id: number;
+  timestamp: string;
+  reasoning: string;
+  audit_hash: string;
+  stellar_tx_id: string | null;
+  status: "verified" | "pending" | "failed" | string;
+  network: string;
+  ledger_url: string;
+};
+
+// Fallback entries in Stellar Testnet format.
+// Used when backend audit list is unavailable or empty.
 const MOCK_DECISIONS: TrustDecision[] = [
   {
     id: "dec_1042",
@@ -58,9 +81,9 @@ const MOCK_DECISIONS: TrustDecision[] = [
     confidence: 0.87,
     reason_codes: ["RATE_TARGET_HIT", "DUE_DATE_SOON", "SAFE_ROUTE"],
     payload_hash: "8f3af17b91dc422ce17ab912f8ca0da23af09f2b19",
-    tx_hash: "0xabc12391f02b8a1d45f7e992ad081ce784bf19ef0",
+    tx_hash: "7309ca89e83f480ac04cf34269e07b5706e5083c9ca90c635d9875d1e7c428cd",
     block_number: 4821931,
-    network: "Base Sepolia",
+    network: "Stellar Testnet",
     status: "verified",
     estimated_rate: 5.0214,
     fee_usd: 12,
@@ -77,9 +100,9 @@ const MOCK_DECISIONS: TrustDecision[] = [
     confidence: 0.78,
     reason_codes: ["RATE_BELOW_TARGET", "LOW_URGENCY"],
     payload_hash: "1d7be1aa02ce441af2ab5519af730dc77a880f0a19",
-    tx_hash: "0x7bf292ad991ce72fe1a0d5a73dbe20fa8ad1ce0bd2",
+    tx_hash: "b2a13f75e4d8c92ab4453f7e9b14a8f2c6d9513ebf1a0490f2b4d7e98a1c32de",
     block_number: 4821029,
-    network: "Base Sepolia",
+    network: "Stellar Testnet",
     status: "verified",
     estimated_rate: 4.9821,
     fee_usd: 8,
@@ -96,8 +119,8 @@ const MOCK_DECISIONS: TrustDecision[] = [
     confidence: 0.81,
     reason_codes: ["FAST_SETTLEMENT_REQUIRED", "SAFE_ROUTE"],
     payload_hash: "5ca1b80d113fe013ab920fc7700da9981dce772ab3",
-    tx_hash: "0x8aa12ce19f1ab007cde912afdb7810ca55bfac8e10",
-    network: "Base Sepolia",
+    tx_hash: "9ee4ac847b6fd0a5dcb72ad8bcf4e83a7f56d9c102f6eebdb6408f4c0f91853a",
+    network: "Stellar Testnet",
     status: "pending",
     estimated_rate: 5.1138,
     fee_usd: 0,
@@ -114,8 +137,8 @@ const MOCK_DECISIONS: TrustDecision[] = [
     confidence: 0.65,
     reason_codes: ["MANUAL_OVERRIDE_REVIEW"],
     payload_hash: "29bf17d0a930f102b91cc2a8f7ac00bd9118ef0123",
-    tx_hash: "0x51ac82bf12a0f8cd7129ce005ba1289dfe0192ca10",
-    network: "Base Sepolia",
+    tx_hash: "f29b68ce70d25fabccdb1e95a8e1624b4fd0ac13de78f15bb7a15395beaf08d4",
+    network: "Stellar Testnet",
     status: "failed",
     estimated_rate: 5.0004,
     fee_usd: 25,
@@ -186,12 +209,26 @@ function getStatusBadge(status: AuditStatus) {
 }
 
 export default function AuditPage() {
+  const PAGE_SIZE = 10;
   const [activeTab, setActiveTab] = useState<TabKey>("summary");
-  const [selectedId, setSelectedId] = useState<string>(MOCK_DECISIONS[0].id);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [decisions, setDecisions] = useState<TrustDecision[]>(MOCK_DECISIONS);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [auditLoading, setAuditLoading] = useState(true);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationResult, setVerificationResult] =
+    useState<VerificationResponse | null>(null);
 
   const selectedDecision = useMemo(
-    () => MOCK_DECISIONS.find((d) => d.id === selectedId) ?? MOCK_DECISIONS[0],
-    [selectedId]
+    () => decisions.find((d) => d.id === selectedId) ?? decisions[0] ?? MOCK_DECISIONS[0],
+    [decisions, selectedId]
+  );
+  const totalPages = Math.max(1, Math.ceil(decisions.length / PAGE_SIZE));
+  const paginatedDecisions = decisions.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
   );
 
   const verificationLabel =
@@ -207,6 +244,121 @@ export default function AuditPage() {
     { key: "decision", label: "Decision" },
     { key: "proof", label: "Proof" },
   ];
+
+  const verificationIdentifier =
+    selectedDecision.tx_hash || selectedDecision.payload_hash;
+
+  async function verifySelectedDecision() {
+    if (!verificationIdentifier) return;
+
+    try {
+      setVerificationLoading(true);
+      setVerificationError(null);
+
+      const response = await fetch(
+        `http://localhost:8000/blockchain/verify/${encodeURIComponent(
+          verificationIdentifier
+        )}`
+      );
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(detail || `Verification failed (${response.status})`);
+      }
+
+      const result: VerificationResponse = await response.json();
+      setVerificationResult(result);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown verification error";
+      setVerificationError(message);
+      setVerificationResult(null);
+    } finally {
+      setVerificationLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    verifySelectedDecision();
+  }, [verificationIdentifier]);
+
+  useEffect(() => {
+    async function loadAuditLog() {
+      try {
+        setAuditLoading(true);
+        setAuditError(null);
+
+        const response = await fetch(
+          "http://localhost:8000/blockchain/audit-log?limit=20"
+        );
+        if (!response.ok) {
+          throw new Error(`Failed to fetch audit log (${response.status})`);
+        }
+
+        const rows: AuditLogListItem[] = await response.json();
+        if (!rows || rows.length === 0) {
+          setDecisions(MOCK_DECISIONS);
+          setSelectedId((current) => current || MOCK_DECISIONS[0].id);
+          setCurrentPage(1);
+          return;
+        }
+
+        const mapped: TrustDecision[] = rows.map((row, index) => {
+          const base = MOCK_DECISIONS[index % MOCK_DECISIONS.length];
+          const loweredReasoning = row.reasoning.toLowerCase();
+          const inferredDecision: DecisionOutcome = loweredReasoning.includes("wait")
+            ? "WAIT"
+            : "CONVERT";
+
+          return {
+            ...base,
+            id: `audit_${row.audit_id}`,
+            created_at: row.timestamp || base.created_at,
+            decision: inferredDecision,
+            payload_hash: row.audit_hash,
+            tx_hash: row.stellar_tx_id || row.audit_hash,
+            network: row.network || "Stellar Testnet",
+            status:
+              row.status === "verified" || row.status === "pending"
+                ? row.status
+                : "failed",
+            reason_codes: row.reasoning
+              ? row.reasoning
+                  .split(/[.]/)
+                  .map((chunk) =>
+                    chunk.trim().toUpperCase().replaceAll(" ", "_")
+                  )
+                  .filter(Boolean)
+                  .slice(0, 3)
+              : base.reason_codes,
+          };
+        });
+
+        setDecisions(mapped);
+        setSelectedId((current) =>
+          current && mapped.some((entry) => entry.id === current)
+            ? current
+            : mapped[0].id
+        );
+        setCurrentPage(1);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to load audit log";
+        setAuditError(message);
+        setDecisions(MOCK_DECISIONS);
+        setSelectedId((current) => current || MOCK_DECISIONS[0].id);
+        setCurrentPage(1);
+      } finally {
+        setAuditLoading(false);
+      }
+    }
+
+    loadAuditLog();
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   return (
     <div className="font-sans antialiased" style={{ background: C.bg, color: C.cream }}>
@@ -372,6 +524,38 @@ export default function AuditPage() {
 
                   {activeTab === "proof" && (
                     <div className="space-y-4">
+                      <div
+                        className="rounded-2xl p-4"
+                        style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}
+                      >
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
+                          Live Verification
+                        </p>
+                        <p className="mt-2 text-sm" style={{ color: C.cream }}>
+                          {verificationLoading
+                            ? "Verifying against backend..."
+                            : verificationResult
+                            ? verificationResult.message
+                            : "Live verification unavailable. Showing local snapshot."}
+                        </p>
+                        {verificationResult?.ledger_url && (
+                          <a
+                            href={verificationResult.ledger_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-block text-sm underline"
+                            style={{ color: C.rose }}
+                          >
+                            Open in Stellar Explorer
+                          </a>
+                        )}
+                        {verificationError && (
+                          <p className="mt-2 text-xs" style={{ color: C.warning }}>
+                            {verificationError}
+                          </p>
+                        )}
+                      </div>
+
                       {[
                         ["Payload Hash", selectedDecision.payload_hash],
                         ["Transaction Hash", selectedDecision.tx_hash],
@@ -466,8 +650,10 @@ export default function AuditPage() {
                   <button
                     className="mt-8 w-full rounded-xl px-4 py-3 text-sm font-bold transition-all hover:opacity-90"
                     style={{ background: C.rose, color: C.bg }}
+                    onClick={verifySelectedDecision}
+                    disabled={verificationLoading}
                   >
-                    Run Manual Audit
+                    {verificationLoading ? "Running..." : "Run Manual Audit"}
                   </button>
                 </div>
 
@@ -499,6 +685,16 @@ export default function AuditPage() {
                   <p className="mt-1 text-sm" style={{ color: C.muted }}>
                     Recent trust-agent decisions and their current audit status.
                   </p>
+                  {auditLoading && (
+                    <p className="mt-1 text-xs" style={{ color: C.muted }}>
+                      Syncing audit entries from backend...
+                    </p>
+                  )}
+                  {auditError && (
+                    <p className="mt-1 text-xs" style={{ color: C.warning }}>
+                      {auditError}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex gap-3">
@@ -553,7 +749,7 @@ export default function AuditPage() {
                     </thead>
 
                     <tbody>
-                      {MOCK_DECISIONS.map((decision) => {
+                      {paginatedDecisions.map((decision) => {
                         const selected = decision.id === selectedDecision.id;
 
                         return (
@@ -599,6 +795,44 @@ export default function AuditPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                <div
+                  className="flex items-center justify-between px-4 py-3"
+                  style={{ borderTop: `1px solid ${C.border}` }}
+                >
+                  <p className="text-xs" style={{ color: C.muted }}>
+                    Page {currentPage} of {totalPages} ({decisions.length} records)
+                  </p>
+
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+                      style={{
+                        background: C.surface,
+                        border: `1px solid ${C.border}`,
+                        color: C.cream,
+                      }}
+                      disabled={currentPage <= 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      className="rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+                      style={{
+                        background: C.surface,
+                        border: `1px solid ${C.border}`,
+                        color: C.cream,
+                      }}
+                      disabled={currentPage >= totalPages}
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
