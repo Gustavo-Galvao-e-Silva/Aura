@@ -149,11 +149,11 @@ best_option = min(valid_options, key=lambda x: x["fx_used"])
 
 ---
 
-## Step 6: Create Auto-Executor ✅ COMPLETE (REFACTORED)
+## Step 6: Create Auto-Executor ✅ COMPLETE (REFACTORED 2x)
 
-**Goal:** Auto-execute high-confidence payments as part of agent workflow
+**Goal:** Auto-execute orchestrator's recommendations as part of agent workflow
 **Time Estimate:** 1.5 hours
-**Actual Time:** 30 min (including refactor)
+**Actual Time:** 45 min (including 2 refactors)
 **Status:** ✅ Complete
 
 ### 6.1 Created `auto_executor.py` ✅
@@ -162,12 +162,21 @@ best_option = min(valid_options, key=lambda x: x["fx_used"])
 
 **Architecture:** Graph node (not separate background task)
 
+**Key Design Decision: Trust the Orchestrator**
+- **NO hardcoded confidence threshold!**
+- **Logic:** If orchestrator says `pay=true` → execute it
+- **Safety:** Skip predicted bills (require user confirmation first)
+
+**Why this works:**
+- Orchestrator already considers urgency, confidence, risk flags
+- Example: Bill due TODAY with 85% confidence → orchestrator says pay → auto-executor executes
+- No need to second-guess the LLM's reasoning with arbitrary thresholds
+
 **Key Features:**
-- **Confidence threshold:** 90% (AUTO_EXECUTE_CONFIDENCE_THRESHOLD = 0.9)
 - **Runs as part of Aura graph workflow** (every 60s with heartbeat)
 - **Logic:**
   - Receives state from orchestrator
-  - Filters for decisions with `pay=true` AND `market_confidence ≥ 0.9`
+  - Filters for: `pay=true` AND `is_predicted=false`
   - Auto-executes payment via `/payments/settle` endpoint
   - Handles "already paid" errors gracefully
   - Returns execution results to state
@@ -221,6 +230,65 @@ Market Monitor (60s) → Aura Graph:
 
 ---
 
+## Step 6.5: Add Predicted Bill Confirmation ✅ COMPLETE
+
+**Goal:** Allow users to confirm/edit predicted bills from Visionary Accountant
+**Time Estimate:** 15 min
+**Actual Time:** 15 min
+**Status:** ✅ Complete
+
+### 6.5.1 Added Confirmation Endpoint ✅
+
+**Location:** `src/server/my_fastapi_app/app/routes/expenses.py`
+
+**New Endpoint:** `POST /expenses/{expense_id}/confirm`
+
+**Purpose:** Convert predicted bills → actual bills (eligible for auto-execution)
+
+**Request Body:**
+```json
+{
+  "name": "Updated bill name (optional)",
+  "amount": 485.00,  // optional adjustment
+  "currency": "USD",  // optional
+  "due_date": "2026-04-15",  // optional
+  "category": "Education"  // optional
+}
+```
+
+**Response:**
+```json
+{
+  "status": "confirmed",
+  "message": "Predicted bill confirmed and now eligible for auto-execution",
+  "expense": {
+    "id": 123,
+    "name": "Tuition",
+    "amount": 485.00,
+    "is_predicted": false,  // ← Changed!
+    ...
+  }
+}
+```
+
+**Workflow:**
+1. Visionary Accountant predicts: "Tuition $500 due April 15"
+2. User reviews: "Actually it's $485"
+3. User calls: `POST /expenses/123/confirm` with `{"amount": 485}`
+4. Bill now eligible for orchestrator + auto-executor
+
+**Added DTO:**
+```python
+class ConfirmPredictedExpenseDTO(BaseModel):
+    name: str | None = None
+    amount: float | None = None
+    currency: Literal["USD", "BRL"] | None = None
+    due_date: str | None = None
+    category: str | None = None
+```
+
+---
+
 ## Step 7: End-to-End Testing 🧪 READY FOR USER
 
 **Goal:** Verify complete flow works end-to-end
@@ -253,32 +321,73 @@ Market Monitor (60s) → Aura Graph:
 ```
 
 #### 7.3 Test Auto-Execution (User to test)
-**Prerequisite:** Orchestrator must return confidence ≥ 90%
+**Prerequisite:** Orchestrator must recommend `pay: true` AND bill must be confirmed (`is_predicted: false`)
 
-**Steps:**
-1. Create urgent liability (due in ≤3 days) OR wait for strong BULLISH signal
-2. Wait for market monitor to run (every 60s) - auto-executor runs as part of workflow
-3. Check logs for auto-execution
+**Test Case 1: Urgent Bill (Low Confidence)**
+1. Create confirmed liability due TODAY
+2. Wait for market monitor to run (every 60s)
+3. Even with 85% confidence, orchestrator will say "pay now" (urgency overrides)
+4. Auto-executor will execute (trusts orchestrator)
+
+**Test Case 2: Predicted Bill**
+1. Upload invoice → Visionary Accountant creates predicted bill
+2. Orchestrator may recommend pay=true
+3. Auto-executor will SKIP (predicted bill needs confirmation first)
+4. User calls `POST /expenses/{id}/confirm`
+5. Next heartbeat → auto-executor will execute
 
 **Expected output in logs:**
 ```
-🎖️ Orchestrator: Market = BULLISH (confidence: 95%)
+🎖️ Orchestrator: Market = NEUTRAL (confidence: 85%)
+   Pay Now: 1, Wait: 0
 ...
-🤖 Auto-Executor: Checking for high-confidence payments...
-   🎯 Found 1 high-confidence payment(s) to execute:
+🤖 Auto-Executor: Checking orchestrator recommendations...
+   🎯 Found 1 confirmed payment(s) to execute (trusting orchestrator):
 
-   ▶️  Executing: Rent ($100.00) for @testuser
-      Liability ID: 123
-      Confidence: 95%
-      Reason: URGENT: Due in 2 days, paying to avoid penalties.
-      ✅ Success! Transaction ID: 456
+   ▶️  Executing: Groceries ($10.00) for @kalyanco
+      Liability ID: 6
+      Confidence: 85%
+      Reason: The bill is due today and must be paid to avoid immediate delinquency...
+      ✅ Success! Transaction ID: 123
 
-✅ Auto-Executor: Processed 1 high-confidence payments
+✅ Auto-Executor: Processed 1 orchestrator recommendations
 ```
 
-**Note:** Auto-executor now runs every 60s (as part of graph heartbeat) instead of every 15 min!
+**Key Insight:** Auto-executor doesn't check confidence - it trusts the orchestrator's reasoning!
 
-#### 7.4 Test Rate Comparison (User to test)
+#### 7.4 Test Predicted Bill Confirmation (User to test)
+
+**Steps:**
+1. Get predicted bills: `GET /expenses/user/testuser?filter_by=predicted`
+2. Review predicted bill details
+3. Confirm (with optional adjustments):
+   ```bash
+   POST /expenses/123/confirm
+   {
+     "amount": 485.00,  // adjust if needed
+     "due_date": "2026-04-15"  // adjust if needed
+   }
+   ```
+4. Verify response shows `is_predicted: false`
+5. Next heartbeat → bill is now eligible for auto-execution
+
+**Expected response:**
+```json
+{
+  "status": "confirmed",
+  "message": "Predicted bill confirmed and now eligible for auto-execution",
+  "expense": {
+    "id": 123,
+    "name": "Tuition",
+    "amount": 485.00,
+    "is_predicted": false,
+    "is_paid": false,
+    ...
+  }
+}
+```
+
+#### 7.5 Test Rate Comparison (User to test)
 **Steps:**
 1. Check backend logs during settlement
 2. Verify FX service compares multiple providers
@@ -304,21 +413,28 @@ Available options: 3
 - ✅ Step 3: FX service (10 min)
 - ✅ Step 4: Settlement real-time rate (5 min)
 - ✅ Step 5: Email provider name (5 min)
-- ✅ Step 6: Auto-executor (20 min)
+- ✅ Step 6: Auto-executor (45 min, including 2 refactors)
+- ✅ Step 6.5: Predicted bill confirmation (15 min)
 
-**Total Time:** ~60 min (vs. estimated 3h 20min)
+**Total Time:** ~95 min (vs. estimated 3h 20min)
 
 **What Changed:**
 - Skipped Step 2 (teammate hasn't created components yet)
 - Can integrate widgets later when ready
-- **REFACTORED:** Auto-executor is now a graph node (not separate background task)
+- **REFACTORED 2x:** Auto-executor design evolved through discussion:
+  1. Initially: Separate background task with 90% confidence threshold
+  2. Refactor 1: Graph node (runs every 60s with workflow)
+  3. Refactor 2: Trust orchestrator completely (no threshold!)
+- **ADDED:** Predicted bill confirmation endpoint
 - All backend work complete and ready to test
 
-**Architecture Benefits of Refactor:**
-- ✅ Auto-executor runs every 60s (faster response time vs. 15 min)
-- ✅ All agent logic in one workflow (cleaner architecture)
-- ✅ State flows naturally through graph nodes
-- ✅ Execution results tracked in state for visibility
+**Architecture Benefits:**
+- ✅ Auto-executor trusts orchestrator's intelligent reasoning
+- ✅ No arbitrary confidence thresholds
+- ✅ Urgency-aware (bills due today get paid even at 85% confidence)
+- ✅ Runs every 60s (part of graph workflow)
+- ✅ Users can confirm/adjust predicted bills before auto-execution
+- ✅ All agent logic in one unified workflow
 - ✅ Trust engine can hash auto-executor results to blockchain
 
 **New Flow:**
