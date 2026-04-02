@@ -57,8 +57,40 @@
 
 ---
 
-## Step 3: Create FX Service ⏳ IN PROGRESS
+## Step 3: Create FX Service ✅ COMPLETE
 
 **Goal:** Create service to fetch real-time FX rates from routes agent
 **Time Estimate:** 30 min
+**Actual Time:** 10 min
+**Status:** ✅ Complete
+
+### 3.1 Created `fx_service.py` ✅
+
+**Location:** `src/server/my_fastapi_app/app/services/fx_service.py`
+
+**Functions:**
+- `get_best_fx_rate(username)` - Fetches live rates from routes agent
+  - Returns LOWEST BRL/USD rate (user pays less BRL)
+  - Has fallback to 5.5 if APIs fail
+  - Returns provider name for transparency
+- `calculate_brl_needed(amount_usd, fx_rate)` - Simple calculation helper
+
+**Key Logic:**
+```python
+# For settlement (BRL → USD): Pick LOWEST fx_rate
+# Lower rate = user pays LESS BRL for same USD = better deal
+best_option = min(valid_options, key=lambda x: x["fx_used"])
+```
+
+**Error Handling:**
+- Graceful fallback if routes agent fails
+- Validates all options have `fx_used` field
+- Logs all decisions for debugging
+
+---
+
+## Step 4: Update Settlement to Use Real-Time Rate ⏳ IN PROGRESS
+
+**Goal:** Replace hardcoded `fx_rate = 5.5` with live rate from FX service
+**Time Estimate:** 20 min
 **Status:** Starting now...
