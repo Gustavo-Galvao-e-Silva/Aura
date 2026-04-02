@@ -403,7 +403,7 @@ function CountUp({ end, suffix = "" }: { end: number; suffix?: string }) {
 const FEATURES = [
   { icon: TrendingUp, title: "Live FX Monitoring",          desc: "Real-time alerts across 150+ pairs. Time transfers for peak windows and save thousands on tuition." },
   { icon: Calendar,   title: "Smart Bill Scheduling",       desc: "Automated scheduling for tuition, rent, and bills. Zero missed payments, full currency visibility." },
-  { icon: Waypoints,  title: "FX Route Optimizer",          desc: "AI scans Wise, Remitly, and Crebit in real time to route transfers through the cheapest path — up to 3% saved." },
+  { icon: Waypoints,  title: "FX Route Optimizer",          desc: "AI scans OFX, Remitly, and Crebit in real time to route transfers through the cheapest path — up to 3% saved." },
   { icon: Shield,     title: "Blockchain Audit Trail",      desc: "Every AI recommendation is SHA-256 hashed on Stellar testnet — cryptographically verifiable proof of reason." },
   { icon: Zap,        title: "Stablecoin Payments",         desc: "Pay USD bills from BRL in seconds via USDC on Stellar. No SWIFT, no wait, no surprises." },
   { icon: BarChart3,  title: "AI Market Signal",            desc: "Aura's LLM agent synthesises BCB, FRED, and commodity data into a BULLISH / BEARISH signal with thesis." },

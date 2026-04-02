@@ -15,11 +15,11 @@ import apiClient from "../API/client";
 
 type ProviderRatesResponse = {
   crebit: number | null;
-  wise: number | null;
+  ofx: number | null;
   remitly: number | null;
 };
 
-type ProviderKey = "crebit" | "wise" | "remitly";
+type ProviderKey = "crebit" | "ofx" | "remitly";
 
 type Liability = {
   id: number;
@@ -51,31 +51,31 @@ const C = {
 
 const providerLabelMap: Record<ProviderKey, string> = {
   crebit: "Crebit",
-  wise: "Wise",
+  ofx: "OFX",
   remitly: "Remitly",
 };
 
 const providerEtaMap: Record<ProviderKey, string> = {
   crebit: "< 1 business day",
-  wise: "1–2 business days",
+  ofx: "1–2 business days",
   remitly: "Minutes to 3 business days",
 };
 
 const providerFeeMap: Record<ProviderKey, number> = {
   crebit: 0,
-  wise: 18,
+  ofx: 0,
   remitly: 0,
 };
 
 const providerImpactMap: Record<ProviderKey, string> = {
   crebit: "Best for fast conversion",
-  wise: "Traditional transfer route",
+  ofx: "Global transfer, no fees",
   remitly: "Promotional consumer rate",
 };
 
 const providerLogoMap: Record<ProviderKey, string> = {
   crebit: "./crebit-logo.png",
-  wise: "./wise-logo.png",
+  ofx: "./ofx_logo.webp",
   remitly: "./remitly-logo.png",
 };
 
@@ -84,7 +84,7 @@ export default function TransferRoutesPage() {
 
   const [rates, setRates] = useState<ProviderRatesResponse>({
     crebit: null,
-    wise: null,
+    ofx: null,
     remitly: null,
   });
 
@@ -95,7 +95,7 @@ export default function TransferRoutesPage() {
   const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
 
   const [leftProvider, setLeftProvider] = useState<ProviderKey>("crebit");
-  const [rightProvider, setRightProvider] = useState<ProviderKey>("wise");
+  const [rightProvider, setRightProvider] = useState<ProviderKey>("ofx");
 
   useEffect(() => {
     async function fetchRates() {
@@ -110,10 +110,10 @@ export default function TransferRoutesPage() {
             response.data?.crebit?.rate !== undefined
               ? Number(response.data.crebit.rate)
               : null,
-          wise:
-            response.data?.wise?.rate !== null &&
-            response.data?.wise?.rate !== undefined
-              ? Number(response.data.wise.rate)
+          ofx:
+            response.data?.ofx?.rate !== null &&
+            response.data?.ofx?.rate !== undefined
+              ? Number(response.data.ofx.rate)
               : null,
           remitly:
             response.data?.remitly?.rate !== null &&
@@ -165,7 +165,7 @@ export default function TransferRoutesPage() {
   const bestProvider = useMemo(() => {
     const entries = [
       { name: "crebit", rate: rates.crebit },
-      { name: "wise", rate: rates.wise },
+      { name: "ofx", rate: rates.ofx },
       { name: "remitly", rate: rates.remitly },
     ].filter(
       (x): x is { name: ProviderKey; rate: number } =>
@@ -445,7 +445,7 @@ export default function TransferRoutesPage() {
 
             <div className="space-y-4">
               {getProviderCard("crebit")}
-              {getProviderCard("wise")}
+              {getProviderCard("ofx")}
               {getProviderCard("remitly")}
             </div>
 
@@ -512,7 +512,7 @@ export default function TransferRoutesPage() {
                     }}
                   >
                     <option value="crebit">Crebit</option>
-                    <option value="wise">Wise</option>
+                    <option value="ofx">OFX</option>
                     <option value="remitly">Remitly</option>
                   </select>
                 </div>
@@ -535,7 +535,7 @@ export default function TransferRoutesPage() {
                     }}
                   >
                     <option value="crebit">Crebit</option>
-                    <option value="wise">Wise</option>
+                    <option value="ofx">OFX</option>
                     <option value="remitly">Remitly</option>
                   </select>
                 </div>

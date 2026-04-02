@@ -57,7 +57,7 @@ type RouteOption = {
   eta_hours: number;
   is_instant: boolean;
   description: string;
-  brl_received: number;
+  brl_cost: number;
   reference_usd: number;
 };
 

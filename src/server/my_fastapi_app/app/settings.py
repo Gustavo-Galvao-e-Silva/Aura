@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     # ============================================================================
 
     CREBIT_API_URL: str = "https://api.crebitpay.com/api/create-quote-new"
-    WISE_API_URL: str = "https://api.wise.com/v3/quotes"
+    WISE_API_URL: str = "https://api.wise.com/v1/rates"
     REMITLY_API_URL: str = "https://api.remitly.io/v3/calculator/estimate"
 
     # ============================================================================
@@ -104,9 +104,9 @@ class Settings(BaseSettings):
     # ============================================================================
 
     REF_AMOUNT_USD: float = 1000.0  # Reference amount for rate comparisons
-    WISE_FEE_USD: float = 18.0  # Wise transfer fee
-    REMITLY_FEE_USD: float = 0.0  # Remitly transfer fee (promotional)
-    CREBIT_FEE_USD: float = 0.0  # Crebit transfer fee (student-focused)
+    OFX_FEE_USD: float = 0.0       # OFX transfer fee (no fee, spread-based)
+    REMITLY_FEE_USD: float = 0.0   # Remitly transfer fee (promotional)
+    CREBIT_FEE_USD: float = 0.0    # Crebit transfer fee (student-focused)
 
     # ============================================================================
     # Default Account Balances

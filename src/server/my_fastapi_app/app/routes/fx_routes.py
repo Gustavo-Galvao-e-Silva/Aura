@@ -26,11 +26,9 @@ async def get_fx_provider_rates():
 
     Returns rate comparisons showing BRL received per $1000 USD sent.
     """
-    wise_api_key = settings.WISE_API_KEY
-
     parsed = {
         "crebit": None,
-        "wise": None,
+        "ofx": None,
         "remitly": None,
     }
 
@@ -61,41 +59,22 @@ async def get_fx_provider_rates():
                 "error": str(e),
             }
 
-        # WISE
+        # OFX — live commercial USD/BRL ask rate via AwesomeAPI (no auth required)
         try:
-            wise_headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
-
-            if wise_api_key:
-                wise_headers["Authorization"] = f"Bearer {wise_api_key}"
-
-            wise_response = await client.post(
-                settings.WISE_API_URL,
-                json={
-                    "sourceCurrency": "USD",
-                    "targetCurrency": "BRL",
-                    "sourceAmount": 1,
-                },
-                headers=wise_headers,
+            ofx_response = await client.get(
+                "https://economia.awesomeapi.com.br/json/last/USD-BRL",
+                headers={"Accept": "application/json"},
             )
+            ofx_json = ofx_response.json()
+            ofx_rate = ofx_json.get("USDBRL", {}).get("ask")
 
-            wise_json = wise_response.json()
-
-            wise_rate = (
-                wise_json.get("rate")
-                or wise_json.get("price", {}).get("rate")
-                or wise_json.get("paymentOptions", [{}])[0].get("rate")
-            )
-
-            parsed["wise"] = {
-                "provider": "wise",
-                "rate": float(wise_rate) if wise_rate is not None else None,
+            parsed["ofx"] = {
+                "provider": "ofx",
+                "rate": float(ofx_rate) if ofx_rate is not None else None,
             }
         except Exception as e:
-            parsed["wise"] = {
-                "provider": "wise",
+            parsed["ofx"] = {
+                "provider": "ofx",
                 "rate": None,
                 "error": str(e),
             }
