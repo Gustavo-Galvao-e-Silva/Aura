@@ -3,6 +3,18 @@ import { Link, useNavigate } from "react-router";
 import { useSignIn } from "@clerk/react-router/legacy";
 import { Eye, EyeOff, Lock, LogIn, Mail, MoveLeft, Wallet } from "lucide-react";
 
+const C = {
+  bg: "#2C3930",
+  surface: "rgba(63,79,68,0.18)",
+  surfaceStrong: "rgba(63,79,68,0.28)",
+  border: "rgba(162,123,92,0.18)",
+  rose: "#A27B5C",
+  cream: "#DCD7C9",
+  muted: "rgba(220,215,201,0.50)",
+  mutedStrong: "rgba(220,215,201,0.72)",
+  danger: "#f87171",
+};
+
 export default function FinGlobalLoginPage() {
   const navigate = useNavigate();
   const { isLoaded, signIn, setActive } = useSignIn();
@@ -46,20 +58,31 @@ export default function FinGlobalLoginPage() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div
+      style={{ backgroundColor: C.bg, color: C.cream }}
+      className="h-screen overflow-hidden"
+    >
       <div className="flex h-full flex-col">
         <main className="flex min-h-0 flex-1 items-center justify-center px-4 py-4">
           <div className="flex w-full max-w-[480px] flex-col">
             <Link
-              className="mb-4 flex items-center gap-2 self-start text-sm font-medium text-slate-500 transition-colors hover:text-blue-700"
+              className="mb-4 flex items-center gap-2 self-start text-sm font-medium transition-colors"
+              style={{ color: C.mutedStrong }}
               to="/"
             >
               <MoveLeft className="h-4 w-4" />
               Back to home
             </Link>
 
-            <div className="flex w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
-              <div className="relative h-40 w-full overflow-hidden bg-blue-700/10">
+            <div
+              className="flex w-full flex-col overflow-hidden rounded-xl shadow-xl"
+              style={{
+                backgroundColor: C.surface,
+                border: `1px solid ${C.border}`,
+                backdropFilter: "blur(12px)",
+              }}
+            >
+              <div className="relative h-40 w-full overflow-hidden" style={{ backgroundColor: C.surfaceStrong }}>
                 <div
                   className="absolute inset-0 bg-cover bg-center"
                   style={{
@@ -68,7 +91,12 @@ export default function FinGlobalLoginPage() {
                   }}
                   aria-label="Cheerful college students studying together on campus"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-white to-transparent dark:from-slate-900" />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: `linear-gradient(to top, ${C.bg}, transparent)`,
+                  }}
+                />
               </div>
 
               <div className="flex flex-col gap-5 px-8 pt-4 pb-6">
@@ -76,51 +104,74 @@ export default function FinGlobalLoginPage() {
                   className="mb-1 flex items-center gap-2 transition-opacity hover:opacity-80"
                   to="/"
                 >
-                  <div className="text-blue-700">
+                  <div style={{ color: C.rose }}>
                     <Wallet className="h-9 w-9" />
                   </div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                  <h1
+                    className="text-2xl font-bold tracking-tight"
+                    style={{ color: C.cream }}
+                  >
                     Revellio
                   </h1>
                 </Link>
 
                 <div className="flex flex-col gap-1">
-                  <h2 className="text-3xl font-black leading-tight tracking-tight text-slate-900 dark:text-slate-100">
+                  <h2
+                    className="text-3xl font-black leading-tight tracking-tight"
+                    style={{ color: C.cream }}
+                  >
                     Welcome back
                   </h2>
-                  <p className="text-base text-slate-500 dark:text-slate-400">
+                  <p style={{ color: C.muted }} className="text-base">
                     Manage your student finances with ease.
                   </p>
                 </div>
 
                 <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <label
+                      className="text-sm font-semibold"
+                      style={{ color: C.mutedStrong }}
+                    >
                       Email
                     </label>
                     <div className="relative">
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                      <div
+                        className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"
+                        style={{ color: C.muted }}
+                      >
                         <Mail className="h-4 w-4" />
                       </div>
                       <input
-                        className="h-12 w-full rounded-lg border border-slate-200 bg-white pl-10 text-sm text-slate-900 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        className="h-12 w-full rounded-lg pl-10 text-sm outline-none transition-colors"
+                        style={{
+                          backgroundColor: C.surfaceStrong,
+                          border: `1px solid ${C.border}`,
+                          color: C.cream,
+                        }}
                         placeholder="Enter your student email"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         autoComplete="email"
                         required
+                        onFocus={(e) => (e.currentTarget.style.borderColor = C.rose)}
+                        onBlur={(e) => (e.currentTarget.style.borderColor = C.border)}
                       />
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      <label
+                        className="text-sm font-semibold"
+                        style={{ color: C.mutedStrong }}
+                      >
                         Password
                       </label>
                       <Link
-                        className="text-sm font-medium text-blue-700 hover:underline"
+                        className="text-sm font-medium hover:underline"
+                        style={{ color: C.rose }}
                         to="/forgot-password"
                       >
                         Forgot password?
@@ -128,25 +179,34 @@ export default function FinGlobalLoginPage() {
                     </div>
 
                     <div className="relative">
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                      <div
+                        className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"
+                        style={{ color: C.muted }}
+                      >
                         <Lock className="h-4 w-4" />
                       </div>
                       <input
-                        className="h-12 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-10 text-sm text-slate-900 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        className="h-12 w-full rounded-lg pl-10 pr-10 text-sm outline-none transition-colors"
+                        style={{
+                          backgroundColor: C.surfaceStrong,
+                          border: `1px solid ${C.border}`,
+                          color: C.cream,
+                        }}
                         placeholder="Enter your password"
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         autoComplete="current-password"
                         required
+                        onFocus={(e) => (e.currentTarget.style.borderColor = C.rose)}
+                        onBlur={(e) => (e.currentTarget.style.borderColor = C.border)}
                       />
                       <button
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 transition-colors"
+                        style={{ color: C.muted }}
                         type="button"
                         onClick={() => setShowPassword((v) => !v)}
-                        aria-label={
-                          showPassword ? "Hide password" : "Show password"
-                        }
+                        aria-label={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -158,13 +218,21 @@ export default function FinGlobalLoginPage() {
                   </div>
 
                   {error && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+                    <div
+                      className="rounded-lg px-3 py-2 text-sm"
+                      style={{
+                        backgroundColor: "rgba(248,113,113,0.10)",
+                        border: `1px solid rgba(248,113,113,0.25)`,
+                        color: C.danger,
+                      }}
+                    >
                       {error}
                     </div>
                   )}
 
                   <button
-                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-3 font-bold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-bold transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ backgroundColor: C.rose, color: C.cream }}
                     type="submit"
                     disabled={!isLoaded || isSubmitting}
                   >
@@ -175,10 +243,13 @@ export default function FinGlobalLoginPage() {
 
                 <div className="relative my-1">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200 dark:border-slate-700" />
+                    <div className="w-full" style={{ borderTop: `1px solid ${C.border}` }} />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="bg-white px-2 text-slate-500 dark:bg-slate-900">
+                    <span
+                      className="px-2"
+                      style={{ backgroundColor: C.bg, color: C.muted }}
+                    >
                       New to Revellio?
                     </span>
                   </div>
@@ -186,13 +257,18 @@ export default function FinGlobalLoginPage() {
 
                 <Link
                   to="/register"
-                  className="flex w-full items-center justify-center rounded-lg bg-blue-700/10 px-4 py-3 font-bold text-blue-700 transition-colors hover:bg-blue-700/20"
+                  className="flex w-full items-center justify-center rounded-lg px-4 py-3 font-bold transition-colors"
+                  style={{
+                    backgroundColor: C.surfaceStrong,
+                    border: `1px solid ${C.border}`,
+                    color: C.rose,
+                  }}
                 >
                   Create an account
                 </Link>
 
                 <div className="text-center">
-                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                  <p className="text-xs" style={{ color: C.muted }}>
                     Protected by secure bank-grade encryption.
                   </p>
                 </div>

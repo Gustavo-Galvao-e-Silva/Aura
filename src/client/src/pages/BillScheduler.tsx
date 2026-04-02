@@ -7,6 +7,7 @@ import {
   Clock,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
+import { useUser } from "@clerk/react-router";
 
 const C = {
   bg: "#2C3930",
@@ -101,6 +102,7 @@ function getCategoryFromName(name: string): string {
 }
 
 export default function BillScheduler() {
+  const { user } = useUser();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("all");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,7 +174,9 @@ export default function BillScheduler() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch("http://localhost:8000/agents/status");
+        const url = new URL("http://localhost:8000/agents/status");
+        if (user?.username) url.searchParams.set("username", user.username);
+        const response = await fetch(url.toString());
         if (!response.ok) {
           throw new Error(`Failed to fetch /status: ${response.status}`);
         }
@@ -188,7 +192,7 @@ export default function BillScheduler() {
     }
 
     loadStatus();
-  }, []);
+  }, [user?.username]);
 
   const bills: ScheduledBill[] = useMemo(() => {
     if (!status?.payment_decisions) return [];
