@@ -385,7 +385,7 @@ async def get_dashboard_expenses(
             Liability.is_predicted == False,
             Liability.username == username,
             Liability.is_paid == False
-        ).order_by(Liability.due_date)
+        ).order_by(Liability.due_date).limit(1)
     )
     next_liability = next_result.scalar_one_or_none()
 

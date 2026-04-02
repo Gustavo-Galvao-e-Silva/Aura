@@ -3,8 +3,7 @@ from agents.state import AuraState
 from agents.agents import fx_strategist_node  # Legacy fallback, can be removed later
 from agents.router import smart_router_node
 from agents.trust import trust_engine_node
-from agents.orchestrator import orchestrator_node
-from agents.auto_executor import auto_executor_node
+from agents.user_coordinator import user_coordinator_node
 from agents.researchers import (
     macro_researcher_node,
     commodity_researcher_node,
@@ -26,9 +25,10 @@ def build_aura_graph():
                ↓
              smart_router          (Get FX provider quotes)
                ↓
-             orchestrator          (Make pay/wait decisions)
-               ↓
-             auto_executor         (Auto-execute high-confidence payments)
+             user_coordinator      (Per-user orchestrator + auto-executor)
+               └─ For each user:
+                    orchestrator (user-specific decisions)
+                    auto_executor (execute confirmed payments)
                ↓
              trust_engine          (Hash to Stellar blockchain)
                ↓
@@ -47,8 +47,7 @@ def build_aura_graph():
 
     # 4. Add the Execution Nodes
     workflow.add_node("smart_router", smart_router_node)
-    workflow.add_node("orchestrator", orchestrator_node)
-    workflow.add_node("auto_executor", auto_executor_node)
+    workflow.add_node("user_coordinator", user_coordinator_node)
     workflow.add_node("trust_engine", trust_engine_node)
 
     # 5. Define the Flow
@@ -63,11 +62,10 @@ def build_aura_graph():
     workflow.add_edge("commodity_researcher", "synthesis")
     workflow.add_edge("sentiment_researcher", "synthesis")
 
-    # Linear flow: synthesis -> router -> orchestrator -> auto_executor -> trust -> END
+    # Linear flow: synthesis -> router -> user_coordinator -> trust -> END
     workflow.add_edge("synthesis", "smart_router")
-    workflow.add_edge("smart_router", "orchestrator")
-    workflow.add_edge("orchestrator", "auto_executor")
-    workflow.add_edge("auto_executor", "trust_engine")
+    workflow.add_edge("smart_router", "user_coordinator")
+    workflow.add_edge("user_coordinator", "trust_engine")
     workflow.add_edge("trust_engine", END)
 
     # 6. Compile

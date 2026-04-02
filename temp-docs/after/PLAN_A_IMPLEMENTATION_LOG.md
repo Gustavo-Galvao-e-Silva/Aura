@@ -415,8 +415,9 @@ Available options: 3
 - ✅ Step 5: Email provider name (5 min)
 - ✅ Step 6: Auto-executor (45 min, including 2 refactors)
 - ✅ Step 6.5: Predicted bill confirmation (15 min)
+- ✅ Step 6.6: Multi-user privacy bug fix (30 min) **CRITICAL**
 
-**Total Time:** ~95 min (vs. estimated 3h 20min)
+**Total Time:** ~125 min (vs. estimated 3h 20min)
 
 **What Changed:**
 - Skipped Step 2 (teammate hasn't created components yet)
@@ -460,3 +461,116 @@ Heartbeat (60s) → Aura Graph:
 1. User tests Steps 7.2-7.4
 2. User reports any issues
 3. When teammate finishes widgets → complete Step 2
+
+---
+
+## Step 6.6: Fix Multi-User Privacy Bug ✅ COMPLETE (CRITICAL)
+
+**Goal:** Fix orchestrator processing bills from ALL users instead of per-user
+**Time Estimate:** 30 min
+**Actual Time:** 30 min
+**Status:** ✅ Complete
+
+### 6.6.1 Problem Identified 🐛
+
+**Bug:** Orchestrator fetched ALL unpaid bills from ALL users in a single run!
+
+**Evidence from logs:**
+```
+🤖 Auto-Executor: Found 2 confirmed payment(s) to execute:
+   ▶️  Executing: Groceries ($10.00) for @kalyanco
+   ▶️  Executing: College Tuition ($1000.00) for @cbahlis
+```
+
+**Privacy violation:** User A's agent seeing User B's bills!
+
+### 6.6.2 Solution: Hybrid Architecture ✅
+
+**Design:** Global market research, per-user decisions
+
+**New Flow:**
+```
+Heartbeat → researchers (parallel) → synthesis → router
+              ↓
+         user_coordinator (NEW!)
+           └─ For each user with unpaid bills:
+                orchestrator (@user)
+                auto_executor (@user)
+              ↓
+         trust_engine → END
+```
+
+**Benefits:**
+- ✅ Market analysis runs ONCE (efficient, global)
+- ✅ FX routes run ONCE (efficient, global)
+- ✅ Each user's bills analyzed separately (privacy)
+- ✅ State stores all users' decisions (separated by username)
+- ✅ Minimal refactor
+
+### 6.6.3 Files Created ✅
+
+**1. `agents/user_coordinator.py` (NEW!)**
+- `get_users_with_unpaid_bills()` - Get usernames with unpaid bills
+- `user_coordinator_node(state)` - Loop through users, run orchestrator + auto-executor for each
+
+**Key logic:**
+```python
+users = await get_users_with_unpaid_bills()
+for username in users:
+    user_state = {**state, "username": username}
+    orchestrator_result = await orchestrator_node(user_state)
+    # Auto-execute for this user
+    ...
+```
+
+### 6.6.4 Files Modified ✅
+
+**1. `agents/orchestrator.py`**
+- Added username parameter from state
+- Filters liabilities by username
+- Updated logs to show `@username`
+
+**Before:**
+```python
+select(Liability).filter(Liability.is_paid == False)  # ALL USERS!
+```
+
+**After:**
+```python
+select(Liability).filter(
+    Liability.is_paid == False,
+    Liability.username == username  # ONE USER
+)
+```
+
+**2. `agents/aura_graph.py`**
+- Removed `orchestrator_node` and `auto_executor_node` from graph
+- Added `user_coordinator_node`
+- Updated flow: `router → user_coordinator → trust_engine`
+
+**3. `my_fastapi_app/app/routes/expenses.py`**
+- Fixed dashboard bug: added `.limit(1)` to prevent `MultipleResultsFound` error
+
+### 6.6.5 Expected Logs ✅
+
+**Now shows per-user processing:**
+```
+👥 User Coordinator: Processing per-user decisions...
+   Found 2 user(s) with unpaid bills: kalyanco, cbahlis
+
+   📋 Processing user: @kalyanco
+🎖️ Orchestrator (@kalyanco): Market = BEARISH (75%)
+✅ Orchestrator (@kalyanco, LLM): Processed 1 bills
+   🤖 Auto-Executor: Found 1 payment(s) to execute for @kalyanco
+      ▶️  Executing: Groceries ($10.00)
+
+   📋 Processing user: @cbahlis
+🎖️ Orchestrator (@cbahlis): Market = BEARISH (75%)
+✅ Orchestrator (@cbahlis, LLM): Processed 1 bills
+   🤖 Auto-Executor: Found 1 payment(s) to execute for @cbahlis
+      ▶️  Executing: College Tuition ($1000.00)
+
+✅ User Coordinator: Processed 2 user(s)
+```
+
+**Privacy restored:** Each user processed separately! ✅

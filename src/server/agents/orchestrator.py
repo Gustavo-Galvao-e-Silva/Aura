@@ -42,16 +42,26 @@ async def orchestrator_node(state: AuraState):
 
     This replaces the previous hardcoded if/elif rules with flexible LLM reasoning
     that can leverage the full nuance of the market thesis.
+
+    PRIVACY: Now processes bills for ONE user at a time (specified in state["username"]).
     """
+    username = state.get("username")
+    if not username:
+        print("⚠️  Orchestrator: No username in state, skipping")
+        return {"selected_route": None, "payment_decisions": []}
+
     async with AsyncSessionLocal() as db:
-        # 1. Fetch ALL unpaid liabilities
+        # 1. Fetch unpaid liabilities for THIS user only
         result = await db.execute(
-            select(Liability).filter(Liability.is_paid == False)
+            select(Liability).filter(
+                Liability.is_paid == False,
+                Liability.username == username
+            )
         )
         unpaid = result.scalars().all()
 
         if not unpaid:
-            print("🎖️ Orchestrator: No unpaid liabilities.")
+            print(f"🎖️ Orchestrator (@{username}): No unpaid liabilities.")
             return {"selected_route": None, "payment_decisions": []}
 
         # 2. Get route data and market analysis
@@ -66,7 +76,7 @@ async def orchestrator_node(state: AuraState):
         metrics = market_analysis.get("metrics", {})
         fetched_at = market_analysis.get("fetched_at", "unknown")
 
-        print(f"🎖️ Orchestrator: Market = {prediction} (confidence: {confidence:.0%})")
+        print(f"🎖️ Orchestrator (@{username}): Market = {prediction} (confidence: {confidence:.0%})")
         print(f"   Risk Flags: {', '.join(risk_flags[:3]) if risk_flags else 'None'}")
         print(f"   Data Fetched: {fetched_at}")
 
@@ -203,7 +213,7 @@ Also provide:
 
                 selected_route = llm_output.get("selected_route_alert", "Aura recommendation generated.")
 
-                print(f"✅ Orchestrator (LLM): Processed {len(decisions_list)} bills")
+                print(f"✅ Orchestrator (@{username}, LLM): Processed {len(decisions_list)} bills")
                 print(f"   Pay Now: {sum(1 for d in decisions_list if d['pay'])}, "
                       f"Wait: {sum(1 for d in decisions_list if not d['pay'])}")
 
@@ -265,7 +275,7 @@ Also provide:
             if pay_now and not top_alert and not bill.is_predicted:
                 top_alert = f"🚀 Aura Recommendation: {reason} Pay {bill.name} (${bill.amount:.2f}) via Crebit for R${cost_details.get('estimated_brl', 0.0):.2f}."
 
-        print(f"✅ Orchestrator (Fallback): Processed {len(decisions_list)} bills")
+        print(f"✅ Orchestrator (@{username}, Fallback): Processed {len(decisions_list)} bills")
 
         return {
             "payment_decisions": decisions_list,
