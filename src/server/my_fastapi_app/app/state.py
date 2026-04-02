@@ -14,7 +14,8 @@ current_state: AuraState = {
     "pending_liabilities": [],
     "market_prediction": "NEUTRAL",
     "selected_route": None,
-    "audit_hash": None
+    "audit_hash": None,
+    "auto_executor_results": []
 }
 
 
