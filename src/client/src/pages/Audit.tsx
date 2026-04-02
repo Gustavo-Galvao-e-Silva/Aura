@@ -67,6 +67,20 @@ type AuditLogListItem = {
   ledger_url: string;
 };
 
+type ContradictionDecision = {
+  id: number;
+  timestamp: string;
+  reasoning: string;
+  audit_hash: string;
+};
+
+type ContradictionPair = {
+  similarity_score: number;
+  decision_a: ContradictionDecision;
+  decision_b: ContradictionDecision;
+  message: string;
+};
+
 // Fallback entries in Stellar Testnet format.
 // Used when backend audit list is unavailable or empty.
 const MOCK_DECISIONS: TrustDecision[] = [
@@ -146,7 +160,7 @@ const MOCK_DECISIONS: TrustDecision[] = [
   },
 ];
 
-type TabKey = "summary" | "inputs" | "decision" | "proof";
+type TabKey = "summary" | "inputs" | "decision" | "proof" | "consistency";
 
 function shortHash(value: string, start = 6, end = 4) {
   if (value.length <= start + end) return value;
@@ -220,6 +234,9 @@ export default function AuditPage() {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verificationResult, setVerificationResult] =
     useState<VerificationResponse | null>(null);
+  const [contradictions, setContradictions] = useState<ContradictionPair[]>([]);
+  const [contradictionsLoading, setContradictionsLoading] = useState(false);
+  const [contradictionsError, setContradictionsError] = useState<string | null>(null);
 
   const selectedDecision = useMemo(
     () => decisions.find((d) => d.id === selectedId) ?? decisions[0] ?? MOCK_DECISIONS[0],
@@ -243,6 +260,7 @@ export default function AuditPage() {
     { key: "inputs", label: "Inputs" },
     { key: "decision", label: "Decision" },
     { key: "proof", label: "Proof" },
+    { key: "consistency", label: "Consistency" },
   ];
 
   const verificationIdentifier =
@@ -278,9 +296,38 @@ export default function AuditPage() {
     }
   }
 
+  async function fetchContradictions() {
+    try {
+      setContradictionsLoading(true);
+      setContradictionsError(null);
+
+      const response = await fetch(
+        "http://localhost:8000/blockchain/search/contradictions?min_similarity=0.75&lookback_days=30"
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch contradictions (${response.status})`);
+      }
+
+      const data: ContradictionPair[] = await response.json();
+      setContradictions(data);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load contradictions";
+      setContradictionsError(message);
+      setContradictions([]);
+    } finally {
+      setContradictionsLoading(false);
+    }
+  }
+
   useEffect(() => {
     verifySelectedDecision();
   }, [verificationIdentifier]);
+
+  useEffect(() => {
+    fetchContradictions();
+  }, []);
 
   useEffect(() => {
     async function loadAuditLog() {
@@ -578,6 +625,131 @@ export default function AuditPage() {
                           </code>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {activeTab === "consistency" && (
+                    <div className="space-y-4">
+                      <div className="mb-6">
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
+                          AI Consistency Analysis
+                        </p>
+                        <h3 className="text-2xl font-black tracking-tight" style={{ color: C.cream }}>
+                          Contradiction Detection
+                        </h3>
+                        <p className="mt-3 max-w-2xl text-sm leading-relaxed" style={{ color: C.mutedStrong }}>
+                          This analysis identifies pairs of decisions where market conditions were very similar
+                          but Aura made opposite recommendations. Helps ensure AI consistency and accountability.
+                        </p>
+                      </div>
+
+                      {contradictionsLoading && (
+                        <div className="rounded-2xl p-8 text-center" style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}>
+                          <p className="text-sm" style={{ color: C.muted }}>
+                            Analyzing decision patterns...
+                          </p>
+                        </div>
+                      )}
+
+                      {contradictionsError && (
+                        <div className="rounded-2xl p-6" style={{ background: "rgba(248,113,113,0.10)", border: `1px solid ${C.danger}` }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle className="h-5 w-5" style={{ color: C.danger }} />
+                            <p className="font-bold text-sm" style={{ color: C.danger }}>
+                              Analysis Failed
+                            </p>
+                          </div>
+                          <p className="text-sm" style={{ color: C.mutedStrong }}>
+                            {contradictionsError}
+                          </p>
+                        </div>
+                      )}
+
+                      {!contradictionsLoading && !contradictionsError && contradictions.length === 0 && (
+                        <div className="rounded-2xl p-8 text-center" style={{ background: "rgba(52,211,153,0.10)", border: `1px solid ${C.success}` }}>
+                          <CheckCircle2 className="h-12 w-12 mx-auto mb-3" style={{ color: C.success }} />
+                          <p className="font-bold text-lg mb-2" style={{ color: C.success }}>
+                            No Contradictions Detected
+                          </p>
+                          <p className="text-sm" style={{ color: C.mutedStrong }}>
+                            Aura has been making consistent decisions over the last 30 days.
+                            All similar market conditions led to similar recommendations.
+                          </p>
+                        </div>
+                      )}
+
+                      {!contradictionsLoading && contradictions.length > 0 && (
+                        <>
+                          <div className="rounded-2xl p-4" style={{ background: "rgba(251,191,36,0.10)", border: `1px solid ${C.warning}` }}>
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="h-5 w-5" style={{ color: C.warning }} />
+                              <p className="font-bold text-sm" style={{ color: C.warning }}>
+                                {contradictions.length} potential {contradictions.length === 1 ? 'contradiction' : 'contradictions'} detected in last 30 days
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            {contradictions.map((contradiction, idx) => (
+                              <div
+                                key={`${contradiction.decision_a.id}-${contradiction.decision_b.id}`}
+                                className="rounded-2xl p-5"
+                                style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}
+                              >
+                                <div className="flex items-center justify-between mb-4">
+                                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                                    Contradiction #{idx + 1}
+                                  </p>
+                                  <div className="text-right">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
+                                      Similarity
+                                    </p>
+                                    <p className="text-xl font-black" style={{ color: C.warning }}>
+                                      {(contradiction.similarity_score * 100).toFixed(0)}%
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="rounded-xl p-4" style={{ background: "rgba(63,79,68,0.20)", border: `1px solid ${C.border}` }}>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-2" style={{ color: C.muted }}>
+                                      Decision A
+                                    </p>
+                                    <p className="text-xs mb-2" style={{ color: C.mutedStrong }}>
+                                      {fmtDate(contradiction.decision_a.timestamp)}
+                                    </p>
+                                    <p className="text-sm leading-relaxed" style={{ color: C.cream }}>
+                                      {contradiction.decision_a.reasoning}
+                                    </p>
+                                    <code className="mt-3 block text-[10px] break-all" style={{ color: C.muted }}>
+                                      {shortHash(contradiction.decision_a.audit_hash, 8, 6)}
+                                    </code>
+                                  </div>
+
+                                  <div className="rounded-xl p-4" style={{ background: "rgba(63,79,68,0.20)", border: `1px solid ${C.border}` }}>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-2" style={{ color: C.muted }}>
+                                      Decision B
+                                    </p>
+                                    <p className="text-xs mb-2" style={{ color: C.mutedStrong }}>
+                                      {fmtDate(contradiction.decision_b.timestamp)}
+                                    </p>
+                                    <p className="text-sm leading-relaxed" style={{ color: C.cream }}>
+                                      {contradiction.decision_b.reasoning}
+                                    </p>
+                                    <code className="mt-3 block text-[10px] break-all" style={{ color: C.muted }}>
+                                      {shortHash(contradiction.decision_b.audit_hash, 8, 6)}
+                                    </code>
+                                  </div>
+                                </div>
+
+                                <p className="mt-4 text-xs italic" style={{ color: C.mutedStrong }}>
+                                  {contradiction.message}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
