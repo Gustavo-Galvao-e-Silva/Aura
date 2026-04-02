@@ -190,6 +190,7 @@ Also provide:
 
                     decisions_list.append({
                         "liability_id": bill.id,
+                        "username": bill.username,
                         "name": bill.name,
                         "amount_usd": bill.amount,
                         "is_predicted": bill.is_predicted,
@@ -250,6 +251,7 @@ Also provide:
 
             decisions_list.append({
                 "liability_id": bill.id,
+                "username": bill.username,
                 "name": bill.name,
                 "amount_usd": bill.amount,
                 "is_predicted": bill.is_predicted,

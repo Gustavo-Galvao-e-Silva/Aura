@@ -8,11 +8,49 @@ import {
   LogIn,
   Mail,
   User,
-  Wallet,
 } from "lucide-react";
 import UserClient, { type CreateUserPayload } from "../API/UserClient";
 import createUser from "../API/UserClient";
 
+const C = {
+  bg: "#2C3930",
+  surface: "rgba(63,79,68,0.18)",
+  surfaceStrong: "rgba(63,79,68,0.28)",
+  border: "rgba(162,123,92,0.18)",
+  rose: "#A27B5C",
+  cream: "#DCD7C9",
+  muted: "rgba(220,215,201,0.50)",
+  mutedStrong: "rgba(220,215,201,0.72)",
+  danger: "#f87171",
+};
+
+function StyledInput(props: React.InputHTMLAttributes<HTMLInputElement> & { icon?: React.ReactNode }) {
+  const { icon, ...rest } = props;
+  return (
+    <div className="relative">
+      {icon && (
+        <span
+          className="absolute left-3 top-1/2 -translate-y-1/2"
+          style={{ color: C.muted }}
+        >
+          {icon}
+        </span>
+      )}
+      <input
+        className="w-full rounded-lg py-3 pr-4 outline-none transition-colors"
+        style={{
+          backgroundColor: C.surfaceStrong,
+          border: `1px solid ${C.border}`,
+          color: C.cream,
+          paddingLeft: icon ? "2.5rem" : "1rem",
+        }}
+        onFocus={(e) => (e.currentTarget.style.borderColor = C.rose)}
+        onBlur={(e) => (e.currentTarget.style.borderColor = C.border)}
+        {...rest}
+      />
+    </div>
+  );
+}
 
 export default function FinGlobalRegisterPage() {
   const navigate = useNavigate();
@@ -67,8 +105,7 @@ export default function FinGlobalRegisterPage() {
 
       setError(clerkError);
     } finally {
-
-      createUser({fullName: fullName, email: email, username: username} as CreateUserPayload)
+      createUser({ fullName: fullName, email: email, username: username } as CreateUserPayload);
       setIsSubmitting(false);
     }
   }
@@ -82,19 +119,17 @@ export default function FinGlobalRegisterPage() {
     setIsSubmitting(true);
 
     try {
-
       const completeSignUp = await signUp.attemptEmailAddressVerification({
-         code,
-       });
+        code,
+      });
 
-       {/*
+      {/*
         console.log("status:", completeSignUp.status);
         console.log("missingFields:", completeSignUp.missingFields);
         console.log("requiredFields:", completeSignUp.requiredFields);
         console.log("unverifiedFields:", completeSignUp.unverifiedFields);
-       */}
-      
-       
+      */}
+
       if (completeSignUp.status === "complete") {
         await setActive({ session: completeSignUp.createdSessionId });
         navigate("/dashboard");
@@ -103,8 +138,6 @@ export default function FinGlobalRegisterPage() {
           `Verification not complete. Current status: ${completeSignUp.status}`
         );
       }
-      
-
     } catch (err: any) {
       const clerkError =
         err?.errors?.[0]?.longMessage ||
@@ -118,19 +151,29 @@ export default function FinGlobalRegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="sticky top-0 z-50 flex w-full items-center justify-between border-b border-slate-200 bg-white/80 px-6 py-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/80">
-        <div className="flex items-center gap-2 text-blue-700 p-x-[20px]">
-          <div className="flex size-8 items-center justify-center rounded-lg text-white">
-            <img className="min-w-[40px] h-[50px]" src="logo.png"/> 
+    <div
+      className="flex min-h-screen flex-col font-sans"
+      style={{ backgroundColor: C.bg, color: C.cream }}
+    >
+      <header
+        className="sticky top-0 z-50 flex w-full items-center justify-between px-6 py-4 backdrop-blur-md"
+        style={{
+          borderBottom: `1px solid ${C.border}`,
+          backgroundColor: "rgba(44,57,48,0.85)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="flex size-8 items-center justify-center rounded-lg">
+            <img className="min-w-[40px] h-[50px]" src="logo.png" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          <h1 className="text-xl font-bold tracking-tight" style={{ color: C.cream }}>
             Revellio
           </h1>
         </div>
 
         <Link
-          className="flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-blue-700 dark:text-slate-400"
+          className="flex items-center gap-2 text-sm font-medium transition-colors"
+          style={{ color: C.mutedStrong }}
           to="/"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -140,9 +183,21 @@ export default function FinGlobalRegisterPage() {
 
       <main className="flex flex-1 items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex h-32 items-end bg-gradient-to-br from-blue-700 to-blue-600 p-6">
-              <h2 className="text-2xl font-bold text-white">
+          <div
+            className="overflow-hidden rounded-xl shadow-xl"
+            style={{
+              backgroundColor: C.surface,
+              border: `1px solid ${C.border}`,
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <div
+              className="flex h-32 items-end p-6"
+              style={{
+                background: `linear-gradient(to bottom right, ${C.rose}, rgba(162,123,92,0.6))`,
+              }}
+            >
+              <h2 className="text-2xl font-bold" style={{ color: C.cream }}>
                 {pendingVerification ? "Verify your email" : "Create Account"}
               </h2>
             </div>
@@ -150,124 +205,107 @@ export default function FinGlobalRegisterPage() {
             <div className="p-8">
               {!pendingVerification ? (
                 <>
-                  <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
+                  <p className="mb-8 text-sm" style={{ color: C.muted }}>
                     Join Revellio to manage your student finances, track loans,
                     and plan your budget.
                   </p>
 
                   <form className="space-y-5" onSubmit={handleRegister}>
                     <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      <label className="text-sm font-semibold" style={{ color: C.mutedStrong }}>
                         Full Name
                       </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                          <User className="h-5 w-5" />
-                        </span>
-                        <input
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 outline-none transition-all focus:border-blue-700 focus:ring-2 focus:ring-blue-700/20 dark:border-slate-700 dark:bg-slate-800"
-                          placeholder="John Doe"
-                          type="text"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          autoComplete="name"
-                          required
-                        />
-                      </div>
+                      <StyledInput
+                        icon={<User className="h-5 w-5" />}
+                        placeholder="John Doe"
+                        type="text"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        autoComplete="name"
+                        required
+                      />
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            Username
-                        </label>
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                            <CircleUser className="h-5 w-5" />
-                            </span>
-                            <input
-                            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 outline-none transition-all focus:border-blue-700 focus:ring-2 focus:ring-blue-700/20 dark:border-slate-700 dark:bg-slate-800"
-                            placeholder="johndoe"
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            autoComplete="username"
-                            required
-                            />
-                        </div>
+                      <label className="text-sm font-semibold" style={{ color: C.mutedStrong }}>
+                        Username
+                      </label>
+                      <StyledInput
+                        icon={<CircleUser className="h-5 w-5" />}
+                        placeholder="johndoe"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        autoComplete="username"
+                        required
+                      />
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      <label className="text-sm font-semibold" style={{ color: C.mutedStrong }}>
                         Email
                       </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                          <Mail className="h-5 w-5" />
-                        </span>
-                        <input
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 outline-none transition-all focus:border-blue-700 focus:ring-2 focus:ring-blue-700/20 dark:border-slate-700 dark:bg-slate-800"
-                          placeholder="name@university.edu"
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          autoComplete="email"
-                          required
-                        />
-                      </div>
+                      <StyledInput
+                        icon={<Mail className="h-5 w-5" />}
+                        placeholder="name@university.edu"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        autoComplete="email"
+                        required
+                      />
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        <label className="text-sm font-semibold" style={{ color: C.mutedStrong }}>
                           Password
                         </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                            <Lock className="h-5 w-5" />
-                          </span>
-                          <input
-                            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 outline-none transition-all focus:border-blue-700 focus:ring-2 focus:ring-blue-700/20 dark:border-slate-700 dark:bg-slate-800"
-                            placeholder="••••••••"
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            autoComplete="new-password"
-                            required
-                          />
-                        </div>
+                        <StyledInput
+                          icon={<Lock className="h-5 w-5" />}
+                          placeholder="••••••••"
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          autoComplete="new-password"
+                          required
+                        />
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        <label className="text-sm font-semibold" style={{ color: C.mutedStrong }}>
                           Confirm
                         </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                            <Lock className="h-5 w-5" />
-                          </span>
-                          <input
-                            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 outline-none transition-all focus:border-blue-700 focus:ring-2 focus:ring-blue-700/20 dark:border-slate-700 dark:bg-slate-800"
-                            placeholder="••••••••"
-                            type="password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            autoComplete="new-password"
-                            required
-                          />
-                        </div>
+                        <StyledInput
+                          icon={<Lock className="h-5 w-5" />}
+                          placeholder="••••••••"
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          autoComplete="new-password"
+                          required
+                        />
                       </div>
                     </div>
 
                     <div id="clerk-captcha" />
 
                     {error && (
-                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+                      <div
+                        className="rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "rgba(248,113,113,0.10)",
+                          border: `1px solid rgba(248,113,113,0.25)`,
+                          color: C.danger,
+                        }}
+                      >
                         {error}
                       </div>
                     )}
 
                     <button
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 py-4 font-bold text-white transition-all hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg py-4 font-bold transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ backgroundColor: C.rose, color: C.cream }}
                       type="submit"
                       disabled={!isLoaded || isSubmitting}
                     >
@@ -278,18 +316,18 @@ export default function FinGlobalRegisterPage() {
                 </>
               ) : (
                 <>
-                  <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
-                    We sent a verification code to <span className="font-semibold">{email}</span>.
+                  <p className="mb-8 text-sm" style={{ color: C.muted }}>
+                    We sent a verification code to{" "}
+                    <span className="font-semibold" style={{ color: C.cream }}>{email}</span>.
                     Enter it below to finish creating your account.
                   </p>
 
                   <form className="space-y-5" onSubmit={handleVerify}>
                     <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      <label className="text-sm font-semibold" style={{ color: C.mutedStrong }}>
                         Verification code
                       </label>
-                      <input
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 px-4 outline-none transition-all focus:border-blue-700 focus:ring-2 focus:ring-blue-700/20 dark:border-slate-700 dark:bg-slate-800"
+                      <StyledInput
                         placeholder="123456"
                         type="text"
                         value={code}
@@ -300,13 +338,21 @@ export default function FinGlobalRegisterPage() {
                     </div>
 
                     {error && (
-                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+                      <div
+                        className="rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          backgroundColor: "rgba(248,113,113,0.10)",
+                          border: `1px solid rgba(248,113,113,0.25)`,
+                          color: C.danger,
+                        }}
+                      >
                         {error}
                       </div>
                     )}
 
                     <button
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 py-4 font-bold text-white transition-all hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg py-4 font-bold transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ backgroundColor: C.rose, color: C.cream }}
                       type="submit"
                       disabled={!isLoaded || isSubmitting}
                     >
@@ -316,10 +362,17 @@ export default function FinGlobalRegisterPage() {
                 </>
               )}
 
-              <div className="mt-8 border-t border-slate-100 pt-6 text-center dark:border-slate-800">
-                <p className="text-sm text-slate-600 dark:text-slate-400">
+              <div
+                className="mt-8 pt-6 text-center"
+                style={{ borderTop: `1px solid ${C.border}` }}
+              >
+                <p className="text-sm" style={{ color: C.mutedStrong }}>
                   Already have an account?{" "}
-                  <Link className="font-semibold text-blue-700 hover:underline" to="/login">
+                  <Link
+                    className="font-semibold hover:underline"
+                    style={{ color: C.rose }}
+                    to="/login"
+                  >
                     Log in
                   </Link>
                 </p>
