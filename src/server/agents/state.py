@@ -75,9 +75,16 @@ class AuraState(TypedDict):
     route_options: List[dict]
     selected_route: Optional[str]   # From Smart Router
     audit_hash: Optional[str]        # From Trust Engine
+    contradiction_metrics: Optional[Dict[str, Any]]  # From Trust Engine (passive monitoring)
+    abort_execution: Optional[bool]  # From Trust Engine (self-correcting)
+    abort_reason: Optional[str]      # From Trust Engine (self-correcting)
 
     # List of {id, name, pay: bool, reason: str}
     payment_decisions: List[dict]
 
     # Auto-executor results (from auto_executor_node)
     auto_executor_results: List[dict]  # List of {liability_id, username, status, transaction_id}
+
+    # Execution control flags
+    execution_skipped: Optional[bool]  # From User Coordinator
+    skip_reason: Optional[str]         # From User Coordinator
