@@ -2,8 +2,8 @@
 
 **Owner:** Teammate
 **Branch:** `feat/agent-visualization`
-**Goal:** Visualize all agent intelligence currently hidden from users
-**Estimated Time:** 4-6 hours
+**Goal:** Create widget components + onClick handlers + Fix Audit page
+**Estimated Time:** 2.5-3 hours
 
 ---
 
@@ -11,47 +11,23 @@
 
 ✅ Backend provides `market_analysis` object in `/agents/status`
 ✅ Routes agent returns `route_options` array
-✅ Audit log stores blockchain hashes
 ✅ Multi-user filtering works (commit `f73f1bc`)
+✅ Settlement endpoint works (`/payments/settle`)
 
 ---
 
-## What's Currently Missing
+## What You're Building
 
-**Backend provides (via `/agents/status`):**
-```typescript
-{
-  market_analysis: {
-    prediction: "BULLISH",
-    confidence: 0.87,              // ← NOT SHOWN
-    thesis: "Strong fundamentals", // ← NOT SHOWN
-    risk_flags: [...],             // ← NOT SHOWN
-    metrics: {
-      selic_rate: 10.75,           // ← NOT SHOWN
-      fed_funds_rate: 5.5,         // ← NOT SHOWN
-      oil_price_usd: 82.5,         // ← NOT SHOWN
-      fiscal_health_score: 7,      // ← NOT SHOWN
-      // ... 20+ more metrics
-    }
-  },
-  route_options: [...],            // ✅ Partially shown
-  payment_decisions: [...]         // ✅ Shown
-}
-```
+**Components to create:**
+1. `MarketAnalysisCard.tsx` - Shows market intelligence (confidence, thesis, risk flags, metrics)
+2. `RouteComparisonCard.tsx` - Shows FX route comparison with best rate highlighted
 
-**Frontend currently shows:**
-- Simple string: "BULLISH" or "BEARISH"
-- Route options (list only)
-- Payment decisions (recommendations)
+**Integration work:**
+- Add onClick handlers to "Pay Bill" buttons
+- Fix Audit page to show "Stellar Testnet" (not "Base Sepolia")
+- (Optional) Fix router.py API calls (background work)
 
-**Frontend SHOULD show:**
-- Confidence levels with visual indicators
-- Market thesis explanation
-- Risk warnings
-- Sentiment analysis (fiscal health, geopolitical risk)
-- Macro/commodity metrics
-- Route comparison with savings calculations
-- Real audit log (not mock data)
+**Note:** User will integrate your components into BillScheduler (not your work).
 
 ---
 
@@ -61,7 +37,7 @@
 
 **File:** `src/client/src/pages/BillScheduler.tsx`
 
-**Find the `StatusResponse` type (line 29) and expand it:**
+**Find the `StatusResponse` type (around line 29) and expand it:**
 
 ```typescript
 // Before:
@@ -77,7 +53,7 @@ type StatusResponse = {
   audit_hash: string | null;
 };
 
-// After:
+// After: Add detailed types
 type MarketMetrics = {
   selic_rate: number | null;
   fed_funds_rate: number | null;
@@ -126,6 +102,13 @@ type StatusResponse = {
   selected_route: string | null;
   audit_hash: string | null;
 };
+```
+
+**Export types for components:**
+
+```typescript
+// At bottom of file or in new types file
+export type { MarketAnalysis, RouteOption, MarketMetrics };
 ```
 
 ---
@@ -436,6 +419,15 @@ const MetricItem: FC<{ label: string; value: string; color: string }> = ({
 );
 ```
 
+**Test component:**
+```typescript
+// Test in BillScheduler temporarily
+import { MarketAnalysisCard } from "../components/MarketAnalysisCard";
+
+// Add somewhere in JSX:
+<MarketAnalysisCard analysis={status?.market_analysis} />
+```
+
 ---
 
 ### Step 3: Create Route Comparison Widget (1 hour)
@@ -479,9 +471,9 @@ export const RouteComparisonCard: FC<Props> = ({ routes, selectedRoute }) => {
     );
   }
 
-  // Find best route (highest BRL received)
+  // Find best route (LOWEST BRL per USD = user pays less)
   const bestRoute = routes.reduce((best, current) =>
-    current.brl_received > best.brl_received ? current : best
+    current.fx_used < best.fx_used ? current : best
   );
 
   return (
@@ -507,7 +499,11 @@ export const RouteComparisonCard: FC<Props> = ({ routes, selectedRoute }) => {
         {routes.map((route) => {
           const isBest = route.name === bestRoute.name;
           const isSelected = selectedRoute === route.name;
-          const savings = route.brl_received - bestRoute.brl_received;
+
+          // Calculate cost for $1000 reference
+          const costFor1000 = 1000 * route.fx_used + (route.fee_usd || 0);
+          const bestCost = 1000 * bestRoute.fx_used + (bestRoute.fee_usd || 0);
+          const extraCost = costFor1000 - bestCost;
 
           return (
             <div
@@ -565,14 +561,14 @@ export const RouteComparisonCard: FC<Props> = ({ routes, selectedRoute }) => {
                   )}
                 </div>
 
-                {/* BRL Received */}
+                {/* Rate Display */}
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: "1.125rem", fontWeight: "bold" }}>
-                    R${route.brl_received.toFixed(2)}
+                    {route.fx_used.toFixed(2)} BRL/USD
                   </div>
-                  {!isBest && savings < 0 && (
+                  {!isBest && extraCost > 0 && (
                     <div style={{ fontSize: "0.75rem", color: C.yellow }}>
-                      -{Math.abs(savings).toFixed(2)} BRL
+                      +R${extraCost.toFixed(2)} more
                     </div>
                   )}
                 </div>
@@ -589,10 +585,6 @@ export const RouteComparisonCard: FC<Props> = ({ routes, selectedRoute }) => {
                 }}
               >
                 <div>
-                  <span style={{ color: "#666" }}>Rate:</span>{" "}
-                  {route.fx_used.toFixed(2)} BRL/USD
-                </div>
-                <div>
                   <span style={{ color: "#666" }}>Fee:</span> $
                   {route.fee_usd.toFixed(2)}
                 </div>
@@ -601,6 +593,10 @@ export const RouteComparisonCard: FC<Props> = ({ routes, selectedRoute }) => {
                   {route.eta_hours < 1
                     ? "Instant"
                     : `${route.eta_hours}h`}
+                </div>
+                <div>
+                  <span style={{ color: "#666" }}>For $1000:</span> R$
+                  {costFor1000.toFixed(2)}
                 </div>
               </div>
 
@@ -633,7 +629,7 @@ export const RouteComparisonCard: FC<Props> = ({ routes, selectedRoute }) => {
           color: C.yellow,
         }}
       >
-        ℹ️ Revellio automatically uses the best available route for your payments.
+        ℹ️ Revellio automatically uses the best available rate for your payments.
         Rates shown for ${routes[0]?.reference_usd || 1000} USD reference.
       </div>
     </div>
@@ -641,129 +637,43 @@ export const RouteComparisonCard: FC<Props> = ({ routes, selectedRoute }) => {
 };
 ```
 
----
-
-### Step 4: Integrate into BillScheduler (30 min)
-
-**File:** `src/client/src/pages/BillScheduler.tsx`
-
-**Import new components (top of file):**
+**Test component:**
 ```typescript
-import { MarketAnalysisCard } from "../components/MarketAnalysisCard";
+// Test in BillScheduler temporarily
 import { RouteComparisonCard } from "../components/RouteComparisonCard";
-```
 
-**Add before bill list (around line 300):**
-```typescript
-{/* Market Analysis */}
-{status && (
-  <MarketAnalysisCard analysis={status.market_analysis} />
-)}
-
-{/* Route Comparison */}
-{status && status.route_options && status.route_options.length > 0 && (
-  <RouteComparisonCard
-    routes={status.route_options}
-    selectedRoute={status.selected_route}
-  />
-)}
-
-{/* Existing bill list below... */}
+// Add somewhere in JSX:
+<RouteComparisonCard
+  routes={status?.route_options || []}
+  selectedRoute={status?.selected_route}
+/>
 ```
 
 ---
 
-### Step 5: Fix Audit Page Blockchain Display (30 min)
-
-**File:** `src/client/src/pages/Audit.tsx`
-
-**Replace mock data with real backend call:**
-
-**Find MOCK_DECISIONS (lines 49-100):**
-```typescript
-// Before: Using mock data
-const MOCK_DECISIONS: TrustDecision[] = [
-  {
-    network: "Base Sepolia",  // ← Wrong!
-    // ...
-  }
-]
-```
-
-**Replace with:**
-```typescript
-// After: Fetch from backend
-const [decisions, setDecisions] = useState<TrustDecision[]>([]);
-const [loading, setLoading] = useState(true);
-
-useEffect(() => {
-  async function fetchAuditLog() {
-    try {
-      // TODO: Backend needs to create this endpoint
-      // For now, use mock data but with correct blockchain
-      const mockDecisions: TrustDecision[] = [
-        {
-          id: "dec_1042",
-          network: "Stellar Testnet",  // ✅ Correct!
-          tx_hash: "7309ca89e83f480ac04cf34269e07b5706e5083c9ca90c635d9875d1e7c428cd",
-          timestamp: "2026-03-28T14:23:00Z",
-          decision_type: "Payment Authorization",
-          confidence: 87,
-          status: "completed",
-          verification_link: `https://stellar.expert/explorer/testnet/tx/7309ca89e83f480ac04cf34269e07b5706e5083c9ca90c635d9875d1e7c428cd`,
-          details: {
-            amount_usd: 1250,
-            amount_brl: 6500,
-            fx_rate: 5.2,
-            liability_name: "USF Spring 2026 Tuition"
-          }
-        }
-      ];
-
-      setDecisions(mockDecisions);
-      setLoading(false);
-    } catch (error) {
-      console.error("Failed to fetch audit log:", error);
-      setLoading(false);
-    }
-  }
-
-  fetchAuditLog();
-}, []);
-```
-
-**Update blockchain badge (around line 250):**
-```typescript
-// Before:
-<span className="blockchain-badge">Base Sepolia</span>
-
-// After:
-<span className="blockchain-badge">
-  {decision.network}  {/* Shows "Stellar Testnet" */}
-</span>
-```
-
----
-
-### Step 6: Add onClick Handlers to Pay Bill Buttons (1 hour)
+### Step 4: Add onClick Handlers to Pay Bill Buttons (30 min)
 
 **File:** `src/client/src/pages/BillScheduler.tsx`
 
-**Add state for payment processing:**
+#### 4.1 Add State for Payment Processing
+
 ```typescript
+// After existing state declarations (around line 108)
 const [processingPayment, setProcessingPayment] = useState<number | null>(null);
 const [paymentError, setPaymentError] = useState<string | null>(null);
 ```
 
-**Add payment handler:**
+#### 4.2 Add Payment Handler Function
+
 ```typescript
+// After fetchStatus function (around line 200)
 async function handlePayBill(bill: ScheduledBill) {
   setProcessingPayment(bill.id);
   setPaymentError(null);
 
   try {
-    // Get current user from context/auth
-    const username = "testuser"; // TODO: Get from auth context
+    // TODO: Get username from auth context (hardcoded for now)
+    const username = "testuser";
 
     const response = await fetch('http://localhost:8000/payments/settle', {
       method: 'POST',
@@ -781,41 +691,59 @@ async function handlePayBill(bill: ScheduledBill) {
 
     const result = await response.json();
 
-    // Show success (you can replace with a toast/modal)
+    // Show success message
     alert(
       `✅ Payment successful!\n\n` +
       `Paid: ${bill.name}\n` +
-      `Amount: $${result.amount_usd} (R$${result.amount_brl_spent})\n` +
-      `Rate: ${result.fx_rate} BRL/USD (${result.fx_provider})\n\n` +
+      `Amount: $${result.amount_usd} USD (R$${result.amount_brl_spent} BRL)\n` +
+      `Rate: ${result.fx_rate} BRL/USD (from ${result.fx_provider})\n\n` +
       `Stellar TX: ${result.stellar_mint_tx.slice(0, 10)}...\n\n` +
       `Check your email for receipt!`
     );
 
-    // Refresh status
+    // Refresh status to update UI
     fetchStatus();
   } catch (error) {
     console.error('Payment error:', error);
-    setPaymentError(error instanceof Error ? error.message : 'Unknown error');
-    alert(`❌ Payment failed: ${paymentError}`);
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    setPaymentError(errorMsg);
+    alert(`❌ Payment failed: ${errorMsg}`);
   } finally {
     setProcessingPayment(null);
   }
 }
 ```
 
-**Update button onClick (Desktop - around line 539):**
+#### 4.3 Update Desktop "Pay Bill" Button
+
+**Find desktop button (around line 539):**
+
 ```typescript
+// Before:
 <button
+  className="rounded-xl px-4 py-2 text-xs font-bold transition hover:opacity-90"
+  style={{ background: C.rose, color: C.bg }}
+>
+  {bill.recommendation === "Pay Now"
+    ? "Pay Bill"
+    : bill.recommendation === "Wait"
+      ? "Schedule"
+      : "Track Rate"}
+</button>
+
+// After:
+<button
+  className="rounded-xl px-4 py-2 text-xs font-bold transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+  style={{ background: C.rose, color: C.bg }}
   onClick={() => {
     if (bill.recommendation === "Pay Now") {
       handlePayBill(bill);
     } else {
+      // TODO: Implement schedule/track logic later
       alert('Schedule/Track functionality coming soon!');
     }
   }}
   disabled={processingPayment === bill.id}
-  className="..."
-  style={{ ... }}
 >
   {processingPayment === bill.id
     ? "Processing..."
@@ -827,87 +755,231 @@ async function handlePayBill(bill: ScheduledBill) {
 </button>
 ```
 
-**Update mobile button similarly (around line 632).**
+#### 4.4 Update Mobile "Pay Bill" Button
+
+**Find mobile button (around line 632):**
+
+```typescript
+// Same changes as desktop button
+<button
+  className="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
+  style={{ background: C.rose, color: C.bg }}
+  onClick={() => {
+    if (bill.recommendation === "Pay Now") {
+      handlePayBill(bill);
+    } else {
+      alert('Schedule/Track functionality coming soon!');
+    }
+  }}
+  disabled={processingPayment === bill.id}
+>
+  {processingPayment === bill.id
+    ? "Processing..."
+    : bill.recommendation === "Pay Now"
+      ? "Pay Bill"
+      : bill.recommendation === "Wait"
+        ? "Schedule"
+        : "Track Rate"}
+</button>
+```
+
+---
+
+### Step 5: Fix Audit Page Blockchain Display (30 min)
+
+**File:** `src/client/src/pages/Audit.tsx`
+
+#### 5.1 Replace Mock Data Network
+
+**Find MOCK_DECISIONS (around line 49-100):**
+
+```typescript
+// Before:
+const MOCK_DECISIONS: TrustDecision[] = [
+  {
+    id: "dec_1042",
+    network: "Base Sepolia",  // ← Wrong!
+    tx_hash: "0xabc123...",
+    // ...
+  }
+]
+
+// After:
+const MOCK_DECISIONS: TrustDecision[] = [
+  {
+    id: "dec_1042",
+    network: "Stellar Testnet",  // ✅ Correct!
+    tx_hash: "7309ca89e83f480ac04cf34269e07b5706e5083c9ca90c635d9875d1e7c428cd",
+    timestamp: "2026-03-28T14:23:00Z",
+    decision_type: "Payment Authorization",
+    confidence: 87,
+    status: "completed",
+    verification_link: "https://stellar.expert/explorer/testnet/tx/7309ca89e83f480ac04cf34269e07b5706e5083c9ca90c635d9875d1e7c428cd",
+    details: {
+      amount_usd: 1250,
+      amount_brl: 6500,
+      fx_rate: 5.2,
+      liability_name: "USF Spring 2026 Tuition"
+    }
+  },
+  // ... update other mock entries similarly
+]
+```
+
+#### 5.2 Update All Mock Entries
+
+**Replace all instances of:**
+- `"Base Sepolia"` → `"Stellar Testnet"`
+- `"0xabc..."` hashes → Real Stellar TX hashes (64 hex chars)
+- Ethereum explorer links → Stellar explorer links
+
+#### 5.3 Add Comment for Future Backend Integration
+
+```typescript
+// At top of mock data
+// TODO: Replace with real backend data
+// Endpoint: GET /blockchain/audit_log?username={username}
+// For now, using mock data with correct Stellar Testnet format
+const MOCK_DECISIONS: TrustDecision[] = [
+  // ...
+];
+```
+
+---
+
+### Step 6: (Optional Background) Fix Router.py API Calls
+
+**File:** `src/server/agents/router.py`
+
+**Context:** You mentioned fixing API calls to Crebit/Wise/Remitly. Router.py already has fallbacks, so this is non-blocking.
+
+**If APIs are failing, check:**
+
+1. **API keys in .env:**
+   ```bash
+   WISE_API_KEY=your_key_here
+   # Crebit and Remitly use public endpoints (no key needed)
+   ```
+
+2. **Network issues:**
+   ```python
+   # Router.py already has try/except for each provider
+   try:
+       crebit_response = client.post(...)
+   except Exception as e:
+       print(f"⚠️ Router: Crebit quote failed: {e}")
+       # Continues with other providers
+   ```
+
+3. **Fallback values work:**
+   ```python
+   # If all APIs fail, router returns empty list
+   # FX service then uses fallback rate (5.5)
+   # So settlement always works!
+   ```
+
+**No action needed unless you want better API reliability.**
 
 ---
 
 ## Testing Plan
 
-### Test 1: Market Analysis Displays
+### Test 1: Widget Components Render
 
 ```bash
-# 1. Start backend
+# 1. Start frontend
+cd src/client
+npm run dev
+
 # 2. Navigate to Bill Scheduler
-# 3. Verify market analysis card shows:
-#    - Prediction badge (BULLISH/BEARISH)
-#    - Confidence bar (e.g., 87%)
-#    - Thesis text
-#    - Risk flags (if any)
-#    - Key metrics (SELIC, Fed rate, etc.)
+open http://localhost:5173/bill-scheduler
+
+# 3. Verify (if you add components to test):
+#    - Market Analysis card shows prediction, confidence, thesis
+#    - Route Comparison card shows Crebit/Wise/Remitly with best rate badge
 ```
 
-### Test 2: Route Comparison Shows Best Rate
+### Test 2: Pay Bill Button Works
 
 ```bash
-# 1. Check that route comparison card displays
-# 2. Verify "BEST RATE" badge on optimal route
-# 3. Check savings calculation on other routes
-# 4. Verify instant badge on instant routes
+# 1. Ensure backend running and user has BRL balance
+# 2. Click "Pay Bill" on a "Pay Now" recommendation
+# 3. Verify:
+#    - Button changes to "Processing..."
+#    - Alert shows success with provider name
+#    - Bill disappears from list (marked paid)
+#    - Email received (if SMTP configured)
 ```
 
-### Test 3: Pay Bill Button Works
-
-```bash
-# 1. Click "Pay Bill" on a "Pay Now" recommendation
-# 2. Button should show "Processing..."
-# 3. Alert shows success with rate and provider
-# 4. Bill disappears from list (marked paid)
-# 5. Email received with blockchain proof
-```
-
-### Test 4: Audit Page Shows Stellar
+### Test 3: Audit Page Shows Stellar
 
 ```bash
 # 1. Navigate to Audit page
-# 2. Verify network shows "Stellar Testnet" (not "Base Sepolia")
-# 3. Verify Stellar Explorer links work
+open http://localhost:5173/audit
+
+# 2. Verify:
+#    - Network badge shows "Stellar Testnet" (not "Base Sepolia")
+#    - Explorer links go to stellar.expert (not Sepolia block explorer)
 ```
 
 ---
 
 ## Success Criteria
 
-- ✅ Market analysis card shows all intelligence
-- ✅ Confidence levels visualized
-- ✅ Risk flags displayed
-- ✅ Route comparison shows best rate
-- ✅ Savings calculated for each route
-- ✅ Pay Bill buttons trigger settlement
+- ✅ TypeScript types updated with full market_analysis structure
+- ✅ MarketAnalysisCard component created and working
+- ✅ RouteComparisonCard component created and working
+- ✅ "Pay Bill" buttons trigger settlement
 - ✅ Success feedback shows provider used
-- ✅ Audit page uses correct blockchain
-- ✅ All TypeScript types updated
+- ✅ Button shows loading state ("Processing...")
+- ✅ Audit page displays "Stellar Testnet"
+- ✅ Components are ready for user to integrate into BillScheduler
 
 ---
 
-## Files Modified
+## Files Created/Modified
 
-1. **EDIT:** `src/client/src/pages/BillScheduler.tsx` (types, onClick handlers, integrate widgets)
-2. **NEW:** `src/client/src/components/MarketAnalysisCard.tsx`
-3. **NEW:** `src/client/src/components/RouteComparisonCard.tsx`
-4. **EDIT:** `src/client/src/pages/Audit.tsx` (fix blockchain network)
+**Created:**
+1. `src/client/src/components/MarketAnalysisCard.tsx` - Market intelligence widget
+2. `src/client/src/components/RouteComparisonCard.tsx` - Route comparison widget
 
----
+**Modified:**
+3. `src/client/src/pages/BillScheduler.tsx` - Types + onClick handlers
+4. `src/client/src/pages/Audit.tsx` - Fix blockchain network display
 
-## Optional Enhancements
-
-**If time permits:**
-
-1. **Toast notifications** instead of alerts
-2. **Animated confidence bar** on load
-3. **Expandable metrics** (click to see all 20+ metrics)
-4. **Historical trend charts** (confidence over time)
-5. **Real-time rate updates** (polling every 5 min)
+**Optional (Background):**
+5. `src/server/agents/router.py` - Fix API calls (if needed)
 
 ---
 
-**Ready to implement?** Create branch `feat/agent-visualization` and follow steps 1-6!
+## Handoff to User
+
+Once you complete steps 1-5, notify user that:
+
+1. ✅ Both widget components are ready
+2. ✅ onClick handlers work (can test with "Pay Bill" button)
+3. ✅ TypeScript types updated
+4. ✅ Audit page fixed
+
+User will then:
+- Integrate MarketAnalysisCard and RouteComparisonCard into BillScheduler (their Plan A, Step 2)
+- Test end-to-end flow
+
+---
+
+## Notes
+
+**Router.py resilience:**
+- Has fallbacks for each API (Crebit/Wise/Remitly)
+- If all fail, FX service uses 5.5 fallback rate
+- Settlement never blocks on API failures
+
+**Component design:**
+- Self-contained (no external dependencies)
+- Handles loading/error states
+- Uses inline styles (matches existing design system)
+- Responsive (works on mobile + desktop)
+
+---
+
+**Ready to implement!** Follow steps 1-5, components are independent so can be done in parallel.
