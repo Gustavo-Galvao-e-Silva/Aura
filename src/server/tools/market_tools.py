@@ -169,11 +169,11 @@ def fetch_bcb_focus_median() -> Optional[Dict[str, float]]:
         # Get IPCA (inflation) 12-month ahead median
         ipca_url = f"{base_url}/ExpectativaMercadoMensais?$top=1&$filter=Indicador%20eq%20'IPCA'%20and%20baseCalculo%20eq%200&$orderby=Data%20desc&$format=json&$select=Mediana,Data"
 
-        # Get Selic end-of-year median
-        selic_url = f"{base_url}/ExpectativaMercadoAnuais?$top=1&$filter=Indicador%20eq%20'Selic'%20and%20baseCalculo%20eq%200&$orderby=Data%20desc&$format=json&$select=Mediana,Data"
+        # Get Selic end-of-year median (Notice the 's' in Expectativas)
+        selic_url = f"{base_url}/ExpectativasMercadoAnuais?$top=1&$filter=Indicador%20eq%20'Selic'%20and%20baseCalculo%20eq%200&$orderby=Data%20desc&$format=json&$select=Mediana,Data"
 
-        # Get BRL/USD end-of-year median
-        fx_url = f"{base_url}/ExpectativaMercadoAnuais?$top=1&$filter=Indicador%20eq%20'Taxa%20de%20c%C3%A2mbio'%20and%20baseCalculo%20eq%200&$orderby=Data%20desc&$format=json&$select=Mediana,Data"
+        # Get BRL/USD end-of-year median (Notice the 's' in Expectativas)
+        fx_url = f"{base_url}/ExpectativasMercadoAnuais?$top=1&$filter=Indicador%20eq%20'Taxa%20de%20c%C3%A2mbio'%20and%20baseCalculo%20eq%200&$orderby=Data%20desc&$format=json&$select=Mediana,Data"
 
         results = {}
 
