@@ -476,7 +476,7 @@ export default function LandingPage() {
 
           {/* Logo */}
           <button onClick={() => scrollTo("home")} className="flex items-center gap-2.5 shrink-0">
-            <img src="/logo.png" className="h-8 w-auto" alt="" />
+            <img src="/logo_v1.png" className="h-[4.5rem] w-auto" alt="" />
             <span className="text-lg font-extrabold tracking-tight text-[#DCD7C9]">Revellio</span>
           </button>
 
@@ -891,7 +891,7 @@ export default function LandingPage() {
           <div className="mb-12 flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
             <div>
               <div className="mb-3 flex items-center gap-2.5">
-                <img src="logo.png" className="h-10 w-auto" alt="Revellio" />
+                <img src="logo_v1.png" className="h-[6.75rem] w-auto" alt="Revellio" />
                 <span className="text-xl font-extrabold" style={{ color: C.cream }}>Revellio</span>
               </div>
               <p className="max-w-sm text-sm" style={{ color: C.muted }}>
