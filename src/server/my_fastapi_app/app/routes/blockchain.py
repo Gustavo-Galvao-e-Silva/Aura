@@ -23,6 +23,54 @@ class SemanticSearchResult(BaseModel):
     ledger_url: str
 
 
+class AuditLogListItem(BaseModel):
+    """Audit log row for UI list rendering."""
+
+    audit_id: int
+    timestamp: str
+    reasoning: str
+    audit_hash: str
+    stellar_tx_id: Optional[str]
+    status: str
+    network: str
+    ledger_url: str
+
+
+@router.get("/audit-log", response_model=List[AuditLogListItem])
+async def list_audit_log(
+    limit: int = Query(20, ge=1, le=200, description="Maximum number of audit entries"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List recent audit log entries for frontend visualization.
+
+    Returns the most recent rows first, with Stellar explorer links and
+    a derived verification status.
+    """
+    result = await db.execute(
+        select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit)
+    )
+    rows = result.scalars().all()
+
+    entries: List[AuditLogListItem] = []
+    for row in rows:
+        link_id = row.stellar_tx_id or row.decision_hash
+        entries.append(
+            AuditLogListItem(
+                audit_id=row.id,
+                timestamp=row.timestamp.isoformat() if row.timestamp else "",
+                reasoning=row.reasoning or "",
+                audit_hash=row.decision_hash,
+                stellar_tx_id=row.stellar_tx_id,
+                status="verified" if row.stellar_tx_id else "pending",
+                network="Stellar Testnet",
+                ledger_url=f"{STELLAR_EXPLORER_BASE_URL}/{link_id}",
+            )
+        )
+
+    return entries
+
+
 @router.get("/verify/{identifier}")
 async def verify_reasoning(identifier: str, db: AsyncSession = Depends(get_db)):
     """

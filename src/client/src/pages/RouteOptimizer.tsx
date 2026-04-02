@@ -20,6 +20,7 @@ type ProviderRatesResponse = {
 };
 
 type ProviderKey = "crebit" | "ofx" | "remitly";
+const providerOrder: ProviderKey[] = ["crebit", "ofx", "remitly"];
 
 type Liability = {
   id: number;
@@ -162,22 +163,60 @@ export default function TransferRoutesPage() {
     return bills.find((bill) => bill.id === selectedBillId) ?? null;
   }, [bills, selectedBillId]);
 
+  function getProviderOutcome(provider: ProviderKey, amountUsd: number) {
+    const rate = rates[provider];
+    if (rate === null || Number.isNaN(rate)) return null;
+
+    const fee = providerFeeMap[provider];
+    const netUsd = Math.max(amountUsd - fee, 0);
+    const totalBrl = netUsd * rate;
+    const effectiveRatio = amountUsd > 0 ? totalBrl / amountUsd : 0;
+
+    return { provider, rate, totalBrl, effectiveRatio };
+  }
+
+  function pickBestProvider(
+    outcomes: Array<{
+      provider: ProviderKey;
+      rate: number;
+      totalBrl: number;
+      effectiveRatio: number;
+    }>
+  ) {
+    if (outcomes.length === 0) return null;
+
+    return outcomes.reduce((best, current) => {
+      if (current.effectiveRatio > best.effectiveRatio + 1e-9) return current;
+      if (best.effectiveRatio > current.effectiveRatio + 1e-9) return best;
+
+      if (current.rate > best.rate + 1e-9) return current;
+      if (best.rate > current.rate + 1e-9) return best;
+
+      return providerOrder.indexOf(current.provider) <
+        providerOrder.indexOf(best.provider)
+        ? current
+        : best;
+    });
+  }
+
   const bestProvider = useMemo(() => {
-    const entries = [
-      { name: "crebit", rate: rates.crebit },
-      { name: "ofx", rate: rates.ofx },
-      { name: "remitly", rate: rates.remitly },
-    ].filter(
-      (x): x is { name: ProviderKey; rate: number } =>
-        typeof x.rate === "number" && !Number.isNaN(x.rate)
-    );
+    const referenceAmount = selectedBill?.amount ?? 1000;
+    const outcomes = providerOrder
+      .map((provider) => getProviderOutcome(provider, referenceAmount))
+      .filter(
+        (x): x is NonNullable<ReturnType<typeof getProviderOutcome>> =>
+          x !== null
+      );
 
-    if (entries.length === 0) return null;
+    const best = pickBestProvider(outcomes);
+    if (!best) return null;
 
-    return entries.reduce((best, current) =>
-      current.rate > best.rate ? current : best
-    );
-  }, [rates]);
+    return {
+      name: best.provider,
+      rate: best.rate,
+      effectiveRatio: best.effectiveRatio,
+    };
+  }, [rates, selectedBill]);
 
   const comparison = useMemo(() => {
     if (!selectedBill) return null;
@@ -205,7 +244,16 @@ export default function TransferRoutesPage() {
     const leftTotalBrl = leftNetUsd * leftRate;
     const rightTotalBrl = rightNetUsd * rightRate;
 
-    const winner = leftTotalBrl >= rightTotalBrl ? leftProvider : rightProvider;
+    const leftEffectiveRatio = billAmountUsd > 0 ? leftTotalBrl / billAmountUsd : 0;
+    const rightEffectiveRatio = billAmountUsd > 0 ? rightTotalBrl / billAmountUsd : 0;
+    const winner =
+      leftEffectiveRatio > rightEffectiveRatio + 1e-9
+        ? leftProvider
+        : rightEffectiveRatio > leftEffectiveRatio + 1e-9
+        ? rightProvider
+        : providerOrder.indexOf(leftProvider) <= providerOrder.indexOf(rightProvider)
+        ? leftProvider
+        : rightProvider;
     const savings = Math.abs(leftTotalBrl - rightTotalBrl);
 
     return {
@@ -215,6 +263,8 @@ export default function TransferRoutesPage() {
       rightFee,
       leftTotalBrl,
       rightTotalBrl,
+      leftEffectiveRatio,
+      rightEffectiveRatio,
       winner,
       savings,
     };
@@ -437,7 +487,7 @@ export default function TransferRoutesPage() {
                 <span className="text-xs" style={{ color: C.muted }}>
                   Best live rate:{" "}
                   {bestProvider
-                    ? `${bestProvider.rate.toFixed(4)} BRL`
+                    ? `${bestProvider.effectiveRatio.toFixed(4)} BRL per USD`
                     : "Loading..."}
                 </span>
               </div>

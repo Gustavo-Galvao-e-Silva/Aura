@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Banknote,
   TrendingDown,
@@ -127,6 +127,10 @@ export default function BillScheduler() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingPayment, setProcessingPayment] = useState<number | null>(
+    null
+  );
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   function formatCurrency(value: number, currency: "USD" | "BRL") {
     return new Intl.NumberFormat(currency === "BRL" ? "pt-BR" : "en-US", {
@@ -188,31 +192,82 @@ export default function BillScheduler() {
         };
   }
 
-  useEffect(() => {
-    async function loadStatus() {
-      try {
-        setLoading(true);
-        setError(null);
+  const loadStatus = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        const url = new URL("http://localhost:8000/agents/status");
-        if (user?.username) url.searchParams.set("username", user.username);
-        const response = await fetch(url.toString());
-        if (!response.ok) {
-          throw new Error(`Failed to fetch /status: ${response.status}`);
-        }
-
-        const data: StatusResponse = await response.json();
-        setStatus(data);
-      } catch (err) {
-        console.error(err);
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
+      const url = new URL("http://localhost:8000/agents/status");
+      if (user?.username) url.searchParams.set("username", user.username);
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error(`Failed to fetch /status: ${response.status}`);
       }
+
+      const data: StatusResponse = await response.json();
+      setStatus(data);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.username]);
+
+  useEffect(() => {
+    loadStatus();
+  }, [loadStatus]);
+
+  async function handlePayBill(bill: ScheduledBill) {
+    if (bill.recommendation !== "Pay Now") {
+      alert("Schedule/Track functionality coming soon!");
+      return;
     }
 
-    loadStatus();
-  }, [user?.username]);
+    setProcessingPayment(bill.id);
+    setPaymentError(null);
+
+    try {
+      const username = user?.username ?? "testuser";
+      const response = await fetch("http://localhost:8000/payments/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          liability_id: bill.id,
+        }),
+      });
+
+      if (!response.ok) {
+        let detail = `Payment failed (${response.status})`;
+        try {
+          const body = await response.json();
+          if (body?.detail) detail = String(body.detail);
+        } catch {
+          // Keep fallback message when backend doesn't return JSON.
+        }
+        throw new Error(detail);
+      }
+
+      const result = await response.json();
+      alert(
+        `Payment successful!\n\n` +
+          `Paid: ${bill.name}\n` +
+          `Amount: $${result.amount_usd} USD (R$${result.amount_brl_spent} BRL)\n` +
+          `Rate: ${result.fx_rate} BRL/USD (from ${result.fx_provider})\n\n` +
+          `Stellar TX: ${String(result.stellar_mint_tx || "").slice(0, 10)}...`
+      );
+
+      await loadStatus();
+    } catch (err) {
+      console.error("Payment error:", err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setPaymentError(message);
+      alert(`Payment failed: ${message}`);
+    } finally {
+      setProcessingPayment(null);
+    }
+  }
 
   const bills: ScheduledBill[] = useMemo(() => {
     if (!status?.payment_decisions) return [];
@@ -431,6 +486,19 @@ export default function BillScheduler() {
                 </div>
               ) : (
                 <>
+                  {paymentError && (
+                    <div
+                      className="mx-4 mt-4 rounded-xl px-4 py-3 text-sm"
+                      style={{
+                        background: "rgba(248,113,113,0.15)",
+                        border: "1px solid rgba(248,113,113,0.35)",
+                        color: "#fecaca",
+                      }}
+                    >
+                      {paymentError}
+                    </div>
+                  )}
+
                   <div className="hidden overflow-x-auto md:block">
                     <table className="w-full min-w-[950px] text-left">
                       <thead>
@@ -566,10 +634,14 @@ export default function BillScheduler() {
 
                             <td className="px-6 py-5 text-right">
                               <button
-                                className="rounded-xl px-4 py-2 text-xs font-bold transition hover:opacity-90"
+                                className="rounded-xl px-4 py-2 text-xs font-bold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                                 style={{ background: C.rose, color: C.bg }}
+                                onClick={() => handlePayBill(bill)}
+                                disabled={processingPayment === bill.id}
                               >
-                                {bill.recommendation === "Pay Now"
+                                {processingPayment === bill.id
+                                  ? "Processing..."
+                                  : bill.recommendation === "Pay Now"
                                   ? "Pay Bill"
                                   : bill.recommendation === "Wait"
                                     ? "Schedule"
@@ -659,10 +731,14 @@ export default function BillScheduler() {
                         </p>
 
                         <button
-                          className="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition hover:opacity-90"
+                          className="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                           style={{ background: C.rose, color: C.bg }}
+                          onClick={() => handlePayBill(bill)}
+                          disabled={processingPayment === bill.id}
                         >
-                          {bill.recommendation === "Pay Now"
+                          {processingPayment === bill.id
+                            ? "Processing..."
+                            : bill.recommendation === "Pay Now"
                             ? "Pay Bill"
                             : bill.recommendation === "Wait"
                               ? "Schedule"
