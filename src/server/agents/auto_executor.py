@@ -1,8 +1,12 @@
 """
-Auto-Executor - Automatic payment execution for high-confidence decisions.
+Auto-Executor - Automatic payment execution for orchestrator recommendations.
 
-This is a graph node that monitors agent recommendations and automatically
-executes payments when confidence is high (≥90%).
+This is a graph node that executes payments recommended by the orchestrator.
+It trusts the orchestrator's reasoning (which already considers urgency, confidence, risk flags, etc.)
+and simply executes what was recommended.
+
+Safety rule: Only auto-execute CONFIRMED bills (is_predicted=false).
+Predicted bills require user confirmation first.
 
 Part of the Aura agent workflow:
 orchestrator → auto_executor → trust_engine → END
@@ -12,10 +16,6 @@ from typing import Dict
 import httpx
 from agents.state import AuraState
 from my_fastapi_app.app.settings import settings
-
-
-# Confidence threshold for auto-execution
-AUTO_EXECUTE_CONFIDENCE_THRESHOLD = 0.9  # 90%
 
 
 async def execute_payment(liability_id: int, username: str) -> Dict:
@@ -66,15 +66,21 @@ async def execute_payment(liability_id: int, username: str) -> Dict:
 
 async def auto_executor_node(state: AuraState):
     """
-    Graph node: Auto-executes high-confidence payment decisions.
+    Graph node: Auto-executes orchestrator's "pay now" recommendations.
 
     Runs as part of the Aura agent workflow (every heartbeat ~60s).
-    Checks for:
-    - Decisions with pay=true
-    - Market confidence ≥ 90%
-    - Bills not yet paid
 
-    When found, automatically executes the payment via settlement endpoint.
+    Logic: Trust the orchestrator's decisions completely.
+    - If orchestrator says pay=true → execute
+    - Safety: Skip predicted bills (require user confirmation first)
+
+    The orchestrator already considers:
+    - Urgency (bills due soon)
+    - Market confidence
+    - Risk flags
+    - Cost estimates
+
+    No need to second-guess with additional thresholds.
 
     Args:
         state: Current AuraState from the graph
@@ -82,7 +88,7 @@ async def auto_executor_node(state: AuraState):
     Returns:
         Updated state with execution results
     """
-    print(f"🤖 Auto-Executor: Checking for high-confidence payments...")
+    print(f"🤖 Auto-Executor: Checking orchestrator recommendations...")
 
     decisions = state.get("payment_decisions", [])
 
@@ -90,22 +96,26 @@ async def auto_executor_node(state: AuraState):
         print("   No payment decisions found in state")
         return {"auto_executor_results": []}
 
-    # Filter for auto-executable decisions
+    # Filter for auto-executable decisions: trust orchestrator, but skip predicted bills
     auto_executable = [
         d for d in decisions
         if (
             d.get("pay") is True and  # Orchestrator recommended "pay now"
-            d.get("market_confidence", 0.0) >= AUTO_EXECUTE_CONFIDENCE_THRESHOLD  # High confidence
+            not d.get("is_predicted", False)  # Only execute CONFIRMED bills
         )
     ]
 
     if not auto_executable:
-        print(f"   No high-confidence (≥{AUTO_EXECUTE_CONFIDENCE_THRESHOLD:.0%}) payments found")
+        pay_count = sum(1 for d in decisions if d.get("pay"))
+        predicted_count = sum(1 for d in decisions if d.get("pay") and d.get("is_predicted"))
+
+        print(f"   No auto-executable payments found")
         print(f"   Total decisions: {len(decisions)}, "
-              f"Pay recommendations: {sum(1 for d in decisions if d.get('pay'))}")
+              f"Pay recommendations: {pay_count} "
+              f"(including {predicted_count} predicted bills awaiting confirmation)")
         return {"auto_executor_results": []}
 
-    print(f"   🎯 Found {len(auto_executable)} high-confidence payment(s) to execute:")
+    print(f"   🎯 Found {len(auto_executable)} confirmed payment(s) to execute (trusting orchestrator):")
 
     execution_results = []
 
@@ -154,5 +164,5 @@ async def auto_executor_node(state: AuraState):
                     "error": error
                 })
 
-    print(f"\n✅ Auto-Executor: Processed {len(auto_executable)} high-confidence payments")
+    print(f"\n✅ Auto-Executor: Processed {len(auto_executable)} orchestrator recommendations")
     return {"auto_executor_results": execution_results}
