@@ -43,6 +43,9 @@ async def user_coordinator_node(state: AuraState):
     This ensures privacy - each user's bills are analyzed separately,
     but they all benefit from the same global market analysis and FX rates.
 
+    SELF-CORRECTING: If contradictions detected by trust engine, aborts
+    execution to prevent inconsistent behavior. Will retry on next heartbeat.
+
     Args:
         state: Current AuraState with market_analysis and route_options
 
@@ -50,6 +53,22 @@ async def user_coordinator_node(state: AuraState):
         Updated state with all users' payment_decisions and auto_executor_results
     """
     print("👥 User Coordinator: Processing per-user decisions...")
+
+    # Check if execution should be aborted due to contradictions
+    abort_execution = state.get("abort_execution", False)
+    abort_reason = state.get("abort_reason")
+
+    if abort_execution:
+        print(f"🛑 EXECUTION ABORTED BY TRUST ENGINE")
+        print(f"   Reason: {abort_reason}")
+        print(f"   Skipping all orchestration and execution this cycle.")
+        print(f"   Next heartbeat (60s) will re-gather market data and retry.")
+        return {
+            "payment_decisions": [],
+            "auto_executor_results": [],
+            "execution_skipped": True,
+            "skip_reason": abort_reason
+        }
 
     # Get all users with unpaid bills
     users = await get_users_with_unpaid_bills()
