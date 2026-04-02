@@ -23,6 +23,7 @@ from db.models import Checkout, Liability, Transaction, Users, Wallet
 from my_fastapi_app.app.db.session import get_db
 from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.services.mail_service import send_payment_receipt_email
+from my_fastapi_app.app.services.fx_service import get_best_fx_rate, calculate_brl_needed
 from tools.stellar_tools import ensure_account_exists, establish_trustline, mint_mock_brz, swap_brz_to_usdc, MOCK_BRZ_ASSET, USDC_ASSET
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
@@ -392,13 +393,18 @@ async def settle_payment(
     # ========================================================================
     wallet = await _get_or_create_wallet(payment.username, db)
 
-    # Use hardcoded FX rate for MVP (later: call /fx/rates endpoint)
-    fx_rate = 5.5  # 1 USD = 5.5 BRL
+    # Get real-time FX rate from routes agent (Crebit/Wise/Remitly)
+    print(f"   💱 Fetching real-time FX rate...")
+    fx_result = await get_best_fx_rate(payment.username)
+    fx_rate = fx_result["fx_rate"]
+    fx_provider = fx_result["provider"]
+    fx_source = fx_result["source"]
+
     amount_usd = liability.amount
-    amount_brl_needed = amount_usd * fx_rate
+    amount_brl_needed = calculate_brl_needed(amount_usd, fx_rate)
 
     print(f"   Liability: {liability.name} = ${amount_usd:.2f} USD")
-    print(f"   FX Rate: {fx_rate:.2f} BRL/USD")
+    print(f"   FX Rate: {fx_rate:.4f} BRL/USD (via {fx_provider}, {fx_source})")
     print(f"   BRL needed: R${amount_brl_needed:.2f}")
     print(f"   Wallet BRL available: R${wallet.brl_available:.2f}")
 
@@ -505,6 +511,8 @@ async def settle_payment(
             "stellar_mint_tx": stellar_mint_tx,
             "stellar_swap_tx": stellar_swap_tx,
             "fx_rate": fx_rate,
+            "fx_provider": fx_provider,
+            "fx_source": fx_source,
             "amount_usd": amount_usd,
             "amount_brz": amount_brl_needed,
             "amount_usdc_received": amount_usdc_received,
