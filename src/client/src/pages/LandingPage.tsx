@@ -1,229 +1,1005 @@
-import { Calendar, Globe, Mail, Menu, TrendingUp, Wallet, Waypoints } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { motion, useInView, useAnimationFrame, AnimatePresence } from "framer-motion";
+import { Renderer, Program, Mesh, Color, Triangle } from "ogl";
+import {
+  ArrowRight, BarChart3, Calendar, Globe, Mail,
+  Shield, TrendingUp, Waypoints, Zap,
+} from "lucide-react";
 
-export default function FinGlobalLandingPage() {
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  maroon:  "#2C3930",
+  gray:    "#3F4F44",
+  rose:    "#A27B5C",
+  cream:   "#DCD7C9",
+  cardBg:  "rgba(63,79,68,0.2)",
+  border:  "rgba(162,123,92,0.14)",
+  borderHover: "rgba(162,123,92,0.3)",
+  muted:   "rgba(220,215,201,0.5)",
+};
+
+// ─── Aurora (actual ReactBits component — WebGL via OGL) ─────────────────────
+const VERT = `#version 300 es
+in vec2 position;
+void main() {
+  gl_Position = vec4(position, 0.0, 1.0);
+}`;
+
+const FRAG = `#version 300 es
+precision highp float;
+
+uniform float uTime;
+uniform float uAmplitude;
+uniform vec3 uColorStops[3];
+uniform vec2 uResolution;
+uniform float uBlend;
+
+out vec4 fragColor;
+
+vec3 permute(vec3 x) {
+  return mod(((x * 34.0) + 1.0) * x, 289.0);
+}
+
+float snoise(vec2 v){
+  const vec4 C = vec4(
+      0.211324865405187, 0.366025403784439,
+      -0.577350269189626, 0.024390243902439
+  );
+  vec2 i  = floor(v + dot(v, C.yy));
+  vec2 x0 = v - i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod(i, 289.0);
+
+  vec3 p = permute(
+      permute(i.y + vec3(0.0, i1.y, 1.0))
+    + i.x + vec3(0.0, i1.x, 1.0)
+  );
+
+  vec3 m = max(
+      0.5 - vec3(
+          dot(x0, x0),
+          dot(x12.xy, x12.xy),
+          dot(x12.zw, x12.zw)
+      ),
+      0.0
+  );
+  m = m * m;
+  m = m * m;
+
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+
+  vec3 g;
+  g.x  = a0.x  * x0.x  + h.x  * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+
+struct ColorStop {
+  vec3 color;
+  float position;
+};
+
+#define COLOR_RAMP(colors, factor, finalColor) {                               \
+  int index = 0;                                                               \
+  for (int i = 0; i < 2; i++) {                                                \
+     ColorStop currentColor = colors[i];                                       \
+     bool isInBetween = currentColor.position <= factor;                       \
+     index = int(mix(float(index), float(i), float(isInBetween)));             \
+  }                                                                            \
+  ColorStop currentColor = colors[index];                                      \
+  ColorStop nextColor = colors[index + 1];                                     \
+  float range = nextColor.position - currentColor.position;                   \
+  float lerpFactor = (factor - currentColor.position) / range;                \
+  finalColor = mix(currentColor.color, nextColor.color, lerpFactor);          \
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uResolution;
+
+  ColorStop colors[3];
+  colors[0] = ColorStop(uColorStops[0], 0.0);
+  colors[1] = ColorStop(uColorStops[1], 0.5);
+  colors[2] = ColorStop(uColorStops[2], 1.0);
+
+  vec3 rampColor;
+  COLOR_RAMP(colors, uv.x, rampColor);
+
+  float height = snoise(vec2(uv.x * 2.0 + uTime * 0.1, uTime * 0.25)) * 0.5 * uAmplitude;
+  height = exp(height);
+  height = (uv.y * 2.0 - height + 0.2);
+  float intensity = 0.6 * height;
+
+  float midPoint = 0.20;
+  float auroraAlpha = smoothstep(midPoint - uBlend * 0.5, midPoint + uBlend * 0.5, intensity);
+
+  vec3 auroraColor = intensity * rampColor;
+  fragColor = vec4(auroraColor * auroraAlpha, auroraAlpha);
+}`;
+
+interface AuroraProps {
+  colorStops?: string[];
+  amplitude?: number;
+  blend?: number;
+  speed?: number;
+}
+
+function Aurora({ colorStops = ["#3F4F44", "#A27B5C", "#DCD7C9"], amplitude = 1.0, blend = 0.5, speed = 1.0 }: AuroraProps) {
+  const propsRef = useRef<AuroraProps>({ colorStops, amplitude, blend, speed });
+  propsRef.current = { colorStops, amplitude, blend, speed };
+  const ctnDom = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const ctn = ctnDom.current;
+    if (!ctn) return;
+
+    const renderer = new Renderer({ alpha: true, premultipliedAlpha: true, antialias: true });
+    const gl = renderer.gl;
+    gl.clearColor(0, 0, 0, 0);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    (gl.canvas as HTMLCanvasElement).style.backgroundColor = "transparent";
+
+    let program: Program | undefined;
+
+    function resize() {
+      if (!ctn) return;
+      renderer.setSize(ctn.offsetWidth, ctn.offsetHeight);
+      if (program) program.uniforms.uResolution.value = [ctn.offsetWidth, ctn.offsetHeight];
+    }
+    window.addEventListener("resize", resize);
+
+    const geometry = new Triangle(gl);
+    if ((geometry as any).attributes.uv) delete (geometry as any).attributes.uv;
+
+    const toStops = (stops: string[]) => stops.map(h => { const c = new Color(h); return [c.r, c.g, c.b]; });
+
+    program = new Program(gl, {
+      vertex: VERT,
+      fragment: FRAG,
+      uniforms: {
+        uTime:       { value: 0 },
+        uAmplitude:  { value: amplitude },
+        uColorStops: { value: toStops(colorStops) },
+        uResolution: { value: [ctn.offsetWidth, ctn.offsetHeight] },
+        uBlend:      { value: blend },
+      },
+    });
+
+    const mesh = new Mesh(gl, { geometry, program });
+    ctn.appendChild(gl.canvas);
+    resize();
+
+    let id = 0;
+    const tick = (t: number) => {
+      id = requestAnimationFrame(tick);
+      const p = propsRef.current;
+      if (!program) return;
+      program.uniforms.uTime.value = t * 0.001 * (p.speed ?? 1.0) * 0.1;
+      program.uniforms.uAmplitude.value = p.amplitude ?? 1.0;
+      program.uniforms.uBlend.value = p.blend ?? 0.5;
+      program.uniforms.uColorStops.value = toStops(p.colorStops ?? colorStops);
+      renderer.render({ scene: mesh });
+    };
+    id = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("resize", resize);
+      if (ctn && (gl.canvas as HTMLCanvasElement).parentNode === ctn) ctn.removeChild(gl.canvas);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return <div ref={ctnDom} className="w-full h-full" />;
+}
+
+// ─── ShinyText (actual ReactBits — framer-motion useAnimationFrame) ───────────
+interface ShinyTextProps {
+  text: string;
+  speed?: number;
+  color?: string;
+  shineColor?: string;
+  spread?: number;
+  className?: string;
+}
+
+function ShinyText({
+  text,
+  speed = 2.5,
+  color = C.rose,
+  shineColor = C.cream,
+  spread = 120,
+  className = "",
+}: ShinyTextProps) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useAnimationFrame((t) => {
+    const p = ((t / 1000 / speed) % 1) * 100;
+    if (ref.current) ref.current.style.backgroundPosition = `${150 - p * 2}% center`;
+  });
+
   return (
-    <div className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
-      <header className="sticky top-0 z-50 w-full bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5  rounded-lg text-white">
-                  <span className="material-symbols-outlined block">
-                    <img className="w-[70px] h-[60px]" src="logo.png"/> 
-                  </span>
-                </div>
-              <span className="text-xl font-bold tracking-tight"> Revellio </span>
-            </div>
+    <span
+      ref={ref}
+      className={className}
+      style={{
+        background: `linear-gradient(${spread}deg, ${color} 0%, ${color} 40%, ${shineColor} 50%, ${color} 60%, ${color} 100%)`,
+        backgroundSize: "200% auto",
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+        backgroundClip: "text",
+        display: "inline-block",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
 
-            <nav className="hidden md:flex space-x-8 items-center">
-              <a
-                className="text-sm font-medium hover:text-blue-700 transition-colors"
-                href="#features"
+// ─── Magnet (actual ReactBits — pure CSS transform) ───────────────────────────
+interface MagnetProps {
+  children: React.ReactNode;
+  padding?: number;
+  magnetStrength?: number;
+  disabled?: boolean;
+  className?: string;
+}
+
+function Magnet({ children, padding = 80, magnetStrength = 3, disabled = false, className = "" }: MagnetProps) {
+  const [active, setActive] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (disabled) { setPos({ x: 0, y: 0 }); return; }
+    const onMove = (e: MouseEvent) => {
+      if (!ref.current) return;
+      const { left, top, width, height } = ref.current.getBoundingClientRect();
+      const cx = left + width / 2;
+      const cy = top + height / 2;
+      const dx = Math.abs(cx - e.clientX);
+      const dy = Math.abs(cy - e.clientY);
+      if (dx < width / 2 + padding && dy < height / 2 + padding) {
+        setActive(true);
+        setPos({ x: (e.clientX - cx) / magnetStrength, y: (e.clientY - cy) / magnetStrength });
+      } else {
+        setActive(false);
+        setPos({ x: 0, y: 0 });
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [padding, magnetStrength, disabled]);
+
+  return (
+    <div ref={ref} className={className} style={{ position: "relative", display: "inline-block" }}>
+      <div
+        style={{
+          transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
+          transition: active ? "transform 0.3s ease-out" : "transform 0.5s ease-in-out",
+          willChange: "transform",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── SpotlightCard (adapted from ReactBits — CSS variable approach) ───────────
+function SpotlightCard({
+  children,
+  className = "",
+  style,
+  spotlightColor = "rgba(162,123,92,0.14)",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+  spotlightColor?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  function onMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mouse-x", `${e.clientX - r.left}px`);
+    el.style.setProperty("--mouse-y", `${e.clientY - r.top}px`);
+    el.style.setProperty("--spotlight-color", spotlightColor);
+  }
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMouseMove}
+      className={`card-spotlight ${className}`}
+      style={style}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── BlobCursor ───────────────────────────────────────────────────────────────
+function BlobCursor() {
+  const [pos, setPos] = useState({ x: -200, y: -200 });
+  const [pointer, setPointer] = useState(false);
+
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      setPos({ x: e.clientX, y: e.clientY });
+      setPointer(window.getComputedStyle(e.target as HTMLElement).cursor === "pointer");
+    };
+    window.addEventListener("mousemove", move);
+    return () => window.removeEventListener("mousemove", move);
+  }, []);
+
+  return (
+    <>
+      <motion.div
+        className="fixed pointer-events-none z-[9999]"
+        animate={{ x: pos.x - 20, y: pos.y - 20, scale: pointer ? 1.8 : 1 }}
+        transition={{ type: "spring", stiffness: 200, damping: 22 }}
+        style={{ width: 40, height: 40 }}
+      >
+        <div className="w-full h-full rounded-full border" style={{ borderColor: `${C.rose}99` }} />
+      </motion.div>
+      <motion.div
+        className="fixed pointer-events-none z-[9999]"
+        animate={{ x: pos.x - 4, y: pos.y - 4 }}
+        transition={{ type: "spring", stiffness: 800, damping: 40 }}
+        style={{ width: 8, height: 8 }}
+      >
+        <div className="w-full h-full rounded-full" style={{ backgroundColor: C.cream }} />
+      </motion.div>
+    </>
+  );
+}
+
+// ─── AnimatedContent ──────────────────────────────────────────────────────────
+function AnimatedContent({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      initial={{ opacity: 0, y: 44 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// ─── CountUp ──────────────────────────────────────────────────────────────────
+function CountUp({ end, suffix = "" }: { end: number; suffix?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true });
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (!inView) return;
+    let frame = 0;
+    const t = setInterval(() => {
+      frame++;
+      setVal(Math.floor((frame / 60) * end));
+      if (frame >= 60) { setVal(end); clearInterval(t); }
+    }, 16);
+    return () => clearInterval(t);
+  }, [inView, end]);
+  return <span ref={ref}>{val.toLocaleString()}{suffix}</span>;
+}
+
+// ─── Data ─────────────────────────────────────────────────────────────────────
+const FEATURES = [
+  { icon: TrendingUp, title: "Live FX Monitoring",          desc: "Real-time alerts across 150+ pairs. Time transfers for peak windows and save up to 3% on every transaction." },
+  { icon: Calendar,   title: "Smart Bill Scheduling",       desc: "Automated scheduling for tuition, rent, remittances, and recurring bills. Zero missed payments, full currency visibility." },
+  { icon: Waypoints,  title: "FX Route Optimizer",          desc: "AI scans Wise, Remitly, and Crebit in real time to route transfers through the cheapest path — up to 3% saved per transaction." },
+  { icon: Shield,     title: "Blockchain Audit Trail",      desc: "Every AI recommendation is SHA-256 hashed on Stellar testnet — cryptographically verifiable proof accessible to anyone, anywhere." },
+  { icon: Zap,        title: "Stablecoin Payments",         desc: "Pay bills across borders in seconds via USDC on Stellar. No SWIFT, no banks, no barriers — just fast, transparent settlement." },
+  { icon: BarChart3,  title: "AI Market Signal",            desc: "Aura's LLM agent synthesises BCB, FRED, and commodity data into a BULLISH / BEARISH signal — financial intelligence for all." },
+];
+
+const STATS = [
+  { end: 150, suffix: "+", label: "Currencies tracked" },
+  { end: 3,   suffix: "%", label: "Avg. transfer savings" },
+  { end: 2400, suffix: "+", label: "Annual USD saved per student" },
+];
+
+const STEPS = [
+  { n: "01", title: "Deposit via Stripe",       desc: "Top up your Revellio wallet with a test card. Funds are credited after the Stripe webhook confirms." },
+  { n: "02", title: "Aura recommends timing",   desc: "The AI agent synthesises BCB, FRED, and commodity prices into a BULLISH / BEARISH signal — wait or pay now." },
+  { n: "03", title: "BRZ minted on Stellar",    desc: "You confirm. Revellio mints Mock-BRZ to your Stellar testnet account — fiat BRL is now on-chain." },
+  { n: "04", title: "Swap → USDC → USD wire",   desc: "BRZ swapped for USDC on the Stellar DEX. Circle's off-ramp wires USD directly to the university. Bill marked paid." },
+];
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default function LandingPage() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  function scrollTo(id: string) {
+    if (id === "home") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      const el = document.getElementById(id);
+      if (!el) return;
+      // offset by 64px (h-16 fixed navbar)
+      const top = el.getBoundingClientRect().top + window.scrollY - 64;
+      window.scrollTo({ top, behavior: "smooth" });
+    }
+  }
+
+  const heroVars = {
+    hidden: {},
+    visible: { transition: { staggerChildren: 0.12 } },
+  };
+  const heroItem = {
+    hidden:   { opacity: 0, y: 36 },
+    visible:  { opacity: 1, y: 0, transition: { duration: 0.75, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } },
+  };
+
+  return (
+    <div
+      className="min-h-screen font-sans antialiased"
+      style={{ background: C.maroon, color: C.cream, cursor: "none" }}
+    >
+      {/* Spotlight card CSS — injected once */}
+      <style>{`
+        .card-spotlight { position: relative; overflow: hidden; }
+        .card-spotlight::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--spotlight-color, rgba(162,123,92,0.14)), transparent 40%);
+          opacity: 0;
+          transition: opacity 0.35s;
+          pointer-events: none;
+          z-index: 1;
+        }
+        .card-spotlight:hover::before { opacity: 1; }
+      `}</style>
+
+      <BlobCursor />
+
+      {/* ── Navbar ─────────────────────────────────────────────────────────── */}
+      <header className="fixed top-0 z-50 w-full">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+
+          {/* Logo */}
+          <button onClick={() => scrollTo("home")} className="flex items-center gap-2.5 shrink-0">
+            <img src="/logo_v1.png" className="h-[4.5rem] w-auto" alt="" />
+            <span className="text-lg font-extrabold tracking-tight text-[#DCD7C9]">Revellio</span>
+          </button>
+
+          {/* Desktop nav */}
+          <nav className="hidden items-center gap-1 md:flex">
+            {[["Features", "features"], ["Solutions", "solutions"]].map(([label, id]) => (
+              <button
+                key={id}
+                onClick={() => scrollTo(id)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-[#DCD7C9]/55 transition-colors hover:bg-[#A27B5C]/8 hover:text-[#DCD7C9]"
               >
-                Features
-              </a>
-              <a
-                className="text-sm font-medium hover:text-blue-700 transition-colors"
-                href="#solutions"
-              >
-                Solutions
-              </a>
-              <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-2" />
-              <a href="/login" className="text-sm font-semibold hover:text-blue-700 transition-colors">
-                Log In
-              </a>
+                {label}
+              </button>
+            ))}
 
-              <a href={"/login"} className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all shadow-sm">
-                Get Started
-              </a>
-            </nav>
+            <div className="mx-3 h-4 w-px shrink-0" style={{ background: C.border }} />
 
-            <button
-              className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-              aria-label="Open menu"
+            <a
+              href="/login"
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-[#A27B5C] transition-colors hover:text-[#DCD7C9]"
             >
-              <span className="material-symbols-outlined text-2xl"> <Menu/> </span>
-            </button>
-          </div>
+              Log In
+            </a>
+
+            <a
+              href="/login"
+              className="ml-1 inline-flex items-center rounded-xl bg-[#A27B5C] px-5 py-2 text-sm font-bold text-[#2C3930] transition-colors hover:bg-[#DCD7C9]"
+            >
+              Get Started
+            </a>
+          </nav>
+
+          {/* Mobile hamburger */}
+          <button
+            className="inline-flex items-center justify-center rounded-lg p-2 text-[#A27B5C] transition-colors hover:bg-[#A27B5C]/10 md:hidden"
+            onClick={() => setMenuOpen(v => !v)}
+            aria-label="Toggle menu"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d={menuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+            </svg>
+          </button>
         </div>
+
+        {/* Mobile menu */}
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden md:hidden"
+              style={{ borderTop: `1px solid ${C.border}` }}
+            >
+              <div className="flex flex-col gap-1 px-4 py-3">
+                <button onClick={() => { scrollTo("features"); setMenuOpen(false); }} className="rounded-lg px-4 py-2.5 text-left text-sm text-[#A27B5C]/70 hover:text-[#A27B5C]">Features</button>
+                <button onClick={() => { scrollTo("solutions"); setMenuOpen(false); }} className="rounded-lg px-4 py-2.5 text-left text-sm text-[#A27B5C]/70 hover:text-[#A27B5C]">Solutions</button>
+                <a href="/login" className="rounded-lg px-4 py-2.5 text-sm font-semibold text-[#DCD7C9]">Log In</a>
+                <a href="/login" className="mt-1 rounded-xl bg-[#A27B5C] px-4 py-2.5 text-center text-sm font-bold text-[#2C3930]">Get Started</a>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
-      <main>
-        <section className="relative overflow-hidden pt-16 pb-20 lg:pt-24 lg:pb-32">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
-              <div className="max-w-2xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-700/10 text-blue-700 text-xs font-bold mb-6">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-700 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-700" />
-                  </span>
-                  NEW: Real-time FX Optimization
-                </div>
+      {/* ── Hero ────────────────────────────────────────────────────────────── */}
+      <section className="relative flex min-h-screen items-center overflow-hidden pt-16 pb-24">
+        {/* Aurora WebGL background — dark palette so cream text stays readable */}
+        <div className="absolute inset-0 pointer-events-none">
+          <Aurora
+            colorStops={["#3F4F44", "#2C3930", "#1a2620"]}
+            amplitude={1.1}
+            blend={0.5}
+            speed={0.7}
+          />
+        </div>
 
-                <h1 className="text-5xl lg:text-6xl font-black leading-[1.1] tracking-tight mb-6">
-                  Smart Global Finance for{" "}
-                  <span className="text-blue-700">the Modern Student</span>
-                </h1>
+        {/* Subtle grid */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(220,215,201,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(220,215,201,0.8) 1px, transparent 1px)",
+            backgroundSize: "60px 60px",
+          }}
+        />
 
-                <p className="text-lg text-slate-600 dark:text-slate-400 mb-10 leading-relaxed">
-                  Save on tuition payments, international transfers, and
-                  managing your daily living costs. Start saving on every
-                  international transaction today with zero stress.
-                </p>
+        {/* Radial vignette — bottom fade to page bg */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse 100% 80% at 50% 100%, ${C.maroon}ff 0%, transparent 65%)`,
+          }}
+        />
 
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <button className="bg-blue-700 hover:bg-blue-800 text-white px-8 py-4 rounded-xl text-lg font-bold transition-all shadow-lg shadow-blue-700/25">
-                    Get Started
-                  </button>
-                </div>
-              </div>
+        {/* Dark scrim behind the text block so it never bleeds into the aurora */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse 70% 55% at 50% 40%, ${C.maroon}99 0%, transparent 100%)`,
+          }}
+        />
 
-              <div className="relative">
-                <div className="absolute -top-20 -right-20 w-96 h-96 bg-blue-700/20 rounded-full blur-[100px]" />
-                <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200/50 dark:border-slate-700/50 overflow-hidden transform lg:rotate-3 hover:rotate-0 duration-300">
-                  <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                    <div className="flex gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-red-400" />
-                      <div className="w-3 h-3 rounded-full bg-amber-400" />
-                      <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                    </div>
-                    <div className="text-xs font-mono text-slate-400">
-                      dashboard.revellio.com
-                    </div>
-                  </div>
-
-                  <img
-                    alt="International Student Lifestyle"
-                    className="w-full object-cover"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCSwMZm1Xyd6gmczEj2HrQVr9A6h-MbPDJUx9-pSilmJ5g9uKFFotNYzVIuQ3RbaM_-2fJItNEC6DhmNp4-gIOfqU5cdLYONsRyTc77BzKUjH3an3ltH_SV4AvnB1bHYOJP0zhvX3VENJw8BFkh2gbTIlqWW3_FRnvLgqD3YX9B8khSvUO8OkmtPvyj_154TUQC6rdGlo-II_JwqVxtaHZ8JbVovB7lf10yq33FyraDlIjQOjBL2ZzhrjU9fWAWU4jB_R0qbsRtwJF2"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="py-24 bg-white dark:bg-slate-950" id="features">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center max-w-3xl mx-auto mb-20">
-              <h2 className="text-blue-700 font-bold text-sm tracking-widest uppercase mb-3">
-                Key Features
-              </h2>
-              <p className="text-4xl font-black text-slate-900 dark:text-white mb-6">
-                Smart tools built for international student finances
-              </p>
-              <p className="text-lg text-slate-600 dark:text-slate-400">
-                Revellio brings expense tracking, bill scheduling, FX monitoring, and quote alerts together so students can manage cross-border money with more clarity and less stress.
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="group p-8 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-blue-700/30 hover:shadow-xl hover:shadow-blue-700/5 transition-all">
-                <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center mb-6 shadow-sm text-blue-700">
-                  <span className="material-symbols-outlined text-3xl">
-                    <TrendingUp/>
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold mb-4">
-                  Currency Conversion Tracking
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Real-time tracking and intelligent alerts for the best
-                  conversion times. Save thousands on your tuition and rent by
-                  timing your transfers perfectly with 150+ global currencies.
-                </p>
-              </div>
-
-              <div className="group p-8 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-blue-700/30 hover:shadow-xl hover:shadow-blue-700/5 transition-all">
-                <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center mb-6 shadow-sm text-blue-700">
-                  <span className="material-symbols-outlined text-3xl">
-                        <Calendar/>
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold mb-4">Smart Bill Scheduling</h3>
-                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Never miss a payment again. Our automated scheduling handles
-                  your tuition and monthly bills in any currency, with smart
-                  reminders so you can focus on your studies.
-                </p>
-              </div>
-
-              <div className="group p-8 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-blue-700/30 hover:shadow-xl hover:shadow-blue-700/5 transition-all">
-                <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center mb-6 shadow-sm text-blue-700">
-                  <span className="material-symbols-outlined text-3xl">
-                    <Waypoints/>
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold mb-4">FX Route Optimization</h3>
-                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Our proprietary algorithm scans global networks to find the
-                  cheapest and fastest routes, saving you up to 3% on every
-                  single cross-border transfer.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="py-24">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="bg-slate-900 rounded-[2.5rem] p-12 lg:p-20 text-center relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-700/40 to-transparent" />
-              <div className="relative z-10 max-w-3xl mx-auto">
-                <h2 className="text-4xl lg:text-5xl font-black text-white mb-8">
-                  Ready to master your student finances abroad?
-                </h2>
-                <p className="text-lg text-slate-300 mb-10">
-                  Join thousands of international students who are saving more
-                  and worrying less about their global money transfers.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <a href="/login"  className="bg-blue-700 hover:bg-blue-800 text-white px-10 py-4 rounded-xl text-lg font-bold transition-all shadow-lg shadow-blue-700/20">
-                    Get Started Now
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <footer className="bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 pt-20 pb-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-16">
-            <div className="col-span-2 lg:col-span-2">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="p-1.5  rounded-lg text-white">
-                  <span className="material-symbols-outlined block">
-                    <img className="w-[70px] h-[60px]" src="logo.png"/> 
-                  </span>
-                </div>
-                <span className="text-xl font-bold tracking-tight">
-                  Revellio
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <motion.div
+            className="mx-auto max-w-4xl text-center"
+            variants={heroVars}
+            initial="hidden"
+            animate="visible"
+          >
+            {/* Badge */}
+            <motion.div variants={heroItem} className="mb-8 inline-flex">
+              <span
+                className="inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em]"
+                style={{
+                  background: `${C.rose}18`,
+                  border: `1px solid ${C.rose}40`,
+                  color: C.rose,
+                }}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: C.rose }} />
+                  <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: C.rose }} />
                 </span>
+                <ShinyText text="Financial inclusion through AI & blockchain" speed={3} color={C.rose} shineColor={C.cream} />
+              </span>
+            </motion.div>
+
+            {/* Headline */}
+            <motion.h1
+              variants={heroItem}
+              className="mb-6 text-6xl font-black leading-[1.06] tracking-tight lg:text-8xl"
+              style={{ color: C.cream }}
+            >
+              Global Finance,{" "}
+              <span
+                style={{
+                  background: `linear-gradient(135deg, ${C.rose} 0%, ${C.cream} 50%, ${C.rose} 100%)`,
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Built for Everyone
+              </span>
+            </motion.h1>
+
+            {/* Sub */}
+            <motion.p
+              variants={heroItem}
+              className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed"
+              style={{ color: C.muted }}
+            >
+              Revellio tracks live FX rates, schedules cross-border payments, and routes every transfer through the cheapest path. Designed to scale for underbanked populations worldwide.
+            </motion.p>
+
+            {/* CTAs */}
+            <motion.div variants={heroItem} className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <Magnet padding={60} magnetStrength={3}>
+                <a
+                  href="/login"
+                  className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-[#A27B5C] px-9 py-4 text-base font-bold text-[#2C3930] shadow-[0_0_40px_#A27B5C44] transition-all hover:bg-[#DCD7C9] hover:shadow-[0_0_60px_#DCD7C955]"
+                >
+                  <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                  <span className="relative flex items-center gap-2">Start for free <ArrowRight size={16} /></span>
+                </a>
+              </Magnet>
+              <Magnet padding={60} magnetStrength={3}>
+                <a
+                  href="#features"
+                  className="inline-flex items-center rounded-xl border border-[#A27B5C]/25 px-9 py-4 text-base font-semibold text-[#A27B5C] backdrop-blur-sm transition-all hover:border-[#A27B5C]/60 hover:text-[#DCD7C9]"
+                >
+                  See features
+                </a>
+              </Magnet>
+            </motion.div>
+          </motion.div>
+
+          {/* Dashboard mockup */}
+          <motion.div
+            initial={{ opacity: 0, y: 60, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 1.1, delay: 0.55, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] }}
+            className="relative mx-auto mt-20 max-w-3xl"
+          >
+            <div
+              className="absolute inset-x-16 -bottom-8 h-16 rounded-full blur-2xl"
+              style={{ background: `${C.rose}30` }}
+            />
+            <div
+              className="relative overflow-hidden rounded-2xl backdrop-blur-xl"
+              style={{ background: `${C.gray}22`, border: `1px solid ${C.border}` }}
+            >
+              {/* Browser chrome */}
+              <div
+                className="flex items-center justify-between px-5 py-3"
+                style={{ borderBottom: `1px solid ${C.border}`, background: `${C.maroon}66` }}
+              >
+                <div className="flex gap-1.5">
+                  <div className="h-3 w-3 rounded-full" style={{ background: "#c0392b66" }} />
+                  <div className="h-3 w-3 rounded-full" style={{ background: "#f39c1266" }} />
+                  <div className="h-3 w-3 rounded-full" style={{ background: "#27ae6066" }} />
+                </div>
+                <span className="rounded-md px-3 py-1 text-xs font-mono" style={{ background: `${C.gray}33`, color: C.muted }}>
+                  app.revellio.com/dashboard
+                </span>
+                <div className="w-16" />
               </div>
 
-              <p className="text-slate-500 dark:text-slate-400 max-w-sm mb-6">
-                Plan tuition, rent, groceries, and cross-border payments in one place. Aura helps international students time conversions, track expenses, and reduce the cost of everyday life with less stress.
-              </p>
+              {/* Stat cards */}
+              <div className="grid grid-cols-3 gap-4 p-5">
+                {[
+                  { label: "BRL/USD Rate", value: "5.41", sub: "↑ Favourable now", col: C.rose },
+                  { label: "Balance",      value: "$2,400", sub: "↑ +$200 today",  col: C.cream },
+                  { label: "Next Bill",    value: "14 days", sub: "↗ On track",    col: `${C.rose}bb` },
+                ].map(card => (
+                  <div key={card.label} className="rounded-xl p-4" style={{ background: `${C.gray}20`, border: `1px solid ${C.border}` }}>
+                    <p className="mb-2 text-xs" style={{ color: C.muted }}>{card.label}</p>
+                    <p className="text-2xl font-bold" style={{ color: card.col }}>{card.value}</p>
+                    <p className="mt-1 text-xs" style={{ color: C.muted }}>{card.sub}</p>
+                  </div>
+                ))}
+              </div>
 
-              <div className="flex gap-4">
-                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-blue-700 transition-colors cursor-pointer">
-                  <span className="material-symbols-outlined text-xl">
-                    <Globe/>
-                  </span>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-blue-700 transition-colors cursor-pointer">
-                  <span className="material-symbols-outlined text-xl"> <Mail/> </span>
+              {/* Mini chart */}
+              <div className="px-5 pb-5">
+                <div className="rounded-xl p-4" style={{ background: `${C.gray}20`, border: `1px solid ${C.border}` }}>
+                  <p className="mb-3 text-xs" style={{ color: C.muted }}>BRL/USD — 30 day trend</p>
+                  <div className="flex items-end gap-1" style={{ height: 56 }}>
+                    {[55,62,58,70,65,72,68,80,75,82,78,90,85,100].map((h, i) => (
+                      <motion.div
+                        key={i}
+                        className="flex-1 rounded-sm"
+                        style={{ background: `linear-gradient(to top, ${C.rose}, ${C.cream})`, opacity: 0.7, height: `${h}%`, transformOrigin: "bottom" }}
+                        initial={{ scaleY: 0 }}
+                        animate={{ scaleY: 1 }}
+                        transition={{ delay: 0.9 + i * 0.04, duration: 0.45, ease: "easeOut" }}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
+          </motion.div>
+        </div>
+      </section>
 
-
+      {/* ── Stats bar ───────────────────────────────────────────────────────── */}
+      <section className="py-14" style={{ borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, background: `${C.gray}10` }}>
+        <div className="mx-auto max-w-4xl px-4">
+          <div className="grid grid-cols-1 gap-10 sm:grid-cols-3">
+            {STATS.map(({ end, suffix, label }, i) => (
+              <AnimatedContent key={label} delay={i * 0.1} className="text-center">
+                <p className="mb-1 text-5xl font-black" style={{ color: C.cream }}>
+                  <CountUp end={end} suffix={suffix} />
+                </p>
+                <p className="text-sm" style={{ color: C.muted }}>{label}</p>
+              </AnimatedContent>
+            ))}
           </div>
+        </div>
+      </section>
 
-         </div>
+      {/* ── Features ───────────────────────────────────────────────────────── */}
+      <section className="py-32" id="features">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <AnimatedContent className="mb-20 text-center">
+            <span className="mb-4 block text-xs font-bold uppercase tracking-[0.2em]" style={{ color: C.rose }}>
+              Platform capabilities
+            </span>
+            <h2 className="mb-4 text-4xl font-black tracking-tight lg:text-5xl" style={{ color: C.cream }}>
+              Cross-border finance,{" "}
+              <span style={{
+                background: `linear-gradient(135deg, ${C.rose}, ${C.cream})`,
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+              }}>accessible to all</span>
+            </h2>
+            <p className="mx-auto max-w-2xl text-lg" style={{ color: C.muted }}>
+              Built on live data from BCB, FRED, and Stellar. Designed for students, scalable to migrant workers, freelancers, and anyone managing cross-border payments globally.
+            </p>
+          </AnimatedContent>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map(({ icon: Icon, title, desc }, i) => (
+              <AnimatedContent key={title} delay={i * 0.06}>
+                <SpotlightCard
+                  className="group h-full rounded-2xl p-7 transition-all duration-300 hover:-translate-y-1"
+                  style={{
+                    background: C.cardBg,
+                    border: `1px solid ${C.border}`,
+                    backdropFilter: "blur(12px)",
+                  } as React.CSSProperties}
+                  spotlightColor={`${C.rose}20`}
+                >
+                  <div
+                    className="mb-5 inline-flex rounded-xl p-3"
+                    style={{
+                      background: `${C.rose}18`,
+                      border: `1px solid ${C.rose}30`,
+                      boxShadow: `0 0 20px ${C.rose}20`,
+                    }}
+                  >
+                    <Icon size={22} style={{ color: C.rose }} />
+                  </div>
+                  <h3 className="mb-3 text-lg font-bold" style={{ color: C.cream }}>{title}</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{desc}</p>
+                </SpotlightCard>
+              </AnimatedContent>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Financial Inclusion ───────────────────────────────────────────── */}
+      <section className="py-28" style={{ borderTop: `1px solid ${C.border}`, background: `${C.maroon}` }}>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 items-center">
+            <AnimatedContent>
+              <span className="mb-4 block text-xs font-bold uppercase tracking-[0.2em]" style={{ color: C.rose }}>
+                Worldwide Financial Inclusion
+              </span>
+              <h2 className="mb-6 text-4xl font-black tracking-tight lg:text-5xl" style={{ color: C.cream }}>
+                Built for students today.{" "}
+                <span style={{
+                  background: `linear-gradient(135deg, ${C.rose}, ${C.cream})`,
+                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+                }}>Designed for everyone tomorrow.</span>
+              </h2>
+              <p className="mb-6 text-lg leading-relaxed" style={{ color: C.muted }}>
+                Revellio's infrastructure is built on open protocols: Stellar blockchain for settlements, AI-driven market intelligence, and transparent stablecoin rails. This architecture isn't just for students—it's designed to scale.
+              </p>
+              <div className="space-y-4">
+                {[
+                  { title: "Migrant Workers & Remittances", desc: "Send money home with minimal fees, AI-optimized timing, and transparent blockchain proof." },
+                  { title: "Freelancers & Global Contractors", desc: "Receive cross-border payments instantly via stablecoins, avoiding costly wire transfers and currency conversion fees." },
+                  { title: "Underbanked Populations", desc: "Access financial services without traditional banking infrastructure—just a phone and internet connection." },
+                  { title: "Small Businesses & Exporters", desc: "Optimize international payment timing, reduce FX risk, and maintain transparent audit trails for compliance." },
+                ].map((item, i) => (
+                  <AnimatedContent key={item.title} delay={0.1 + i * 0.08}>
+                    <div className="flex gap-4">
+                      <div className="shrink-0 mt-1">
+                        <div className="h-2 w-2 rounded-full" style={{ background: C.rose }} />
+                      </div>
+                      <div>
+                        <h3 className="mb-1 font-bold" style={{ color: C.cream }}>{item.title}</h3>
+                        <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{item.desc}</p>
+                      </div>
+                    </div>
+                  </AnimatedContent>
+                ))}
+              </div>
+            </AnimatedContent>
+
+            <AnimatedContent delay={0.2}>
+              <div
+                className="rounded-2xl p-8"
+                style={{
+                  background: `${C.cardBg}`,
+                  border: `1px solid ${C.border}`,
+                  backdropFilter: "blur(12px)",
+                }}
+              >
+                <h3 className="mb-6 text-2xl font-bold" style={{ color: C.cream }}>
+                  Scalable by Design
+                </h3>
+                <div className="space-y-6">
+                  {[
+                    { stat: "1.7B", label: "Unbanked adults globally", sub: "World Bank, 2021" },
+                    { stat: "$626B", label: "Annual remittance flows", sub: "Developing countries, 2022" },
+                    { stat: "6.5%", label: "Average remittance fee", sub: "Revellio targets <1%" },
+                  ].map((item, i) => (
+                    <AnimatedContent key={item.label} delay={0.3 + i * 0.1}>
+                      <div
+                        className="rounded-xl p-5"
+                        style={{ background: `${C.gray}22`, border: `1px solid ${C.border}` }}
+                      >
+                        <p className="mb-1 text-3xl font-black" style={{ color: C.rose }}>
+                          {item.stat}
+                        </p>
+                        <p className="mb-1 font-semibold" style={{ color: C.cream }}>{item.label}</p>
+                        <p className="text-xs" style={{ color: C.muted }}>{item.sub}</p>
+                      </div>
+                    </AnimatedContent>
+                  ))}
+                </div>
+                <div className="mt-8 rounded-xl p-5" style={{ background: `${C.rose}15`, border: `1px solid ${C.rose}30` }}>
+                  <p className="text-sm leading-relaxed" style={{ color: C.muted }}>
+                    <strong style={{ color: C.rose }}>The opportunity:</strong> By solving cross-border payments for students, Revellio builds the infrastructure to serve the 1.7 billion unbanked adults and $626B in annual remittances—democratizing access to fair, transparent financial services worldwide.
+                  </p>
+                </div>
+              </div>
+            </AnimatedContent>
+          </div>
+        </div>
+      </section>
+
+      {/* ── How it works ───────────────────────────────────────────────────── */}
+      <section className="py-28" id="solutions" style={{ background: `${C.gray}0d` }}>
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <AnimatedContent className="mb-16 text-center">
+            <span className="mb-4 block text-xs font-bold uppercase tracking-[0.2em]" style={{ color: C.rose }}>
+              The pipeline
+            </span>
+            <h2 className="text-4xl font-black tracking-tight lg:text-5xl" style={{ color: C.cream }}>
+              Pay in BRL, land in USD —{" "}
+              <span style={{
+                background: `linear-gradient(135deg, ${C.rose}, ${C.cream})`,
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+              }}>in under 30 seconds</span>
+            </h2>
+          </AnimatedContent>
+
+          <div className="relative space-y-8">
+            <div
+              className="absolute left-6 top-0 hidden h-full w-px md:block"
+              style={{ background: `linear-gradient(to bottom, transparent, ${C.rose}50, transparent)` }}
+            />
+            {STEPS.map(({ n, title, desc }, i) => (
+              <AnimatedContent key={n} delay={i * 0.09}>
+                <div className="flex gap-6 md:items-start">
+                  <div
+                    className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-black"
+                    style={{
+                      background: `${C.rose}20`,
+                      border: `1px solid ${C.rose}50`,
+                      color: C.rose,
+                      boxShadow: `0 0 18px ${C.rose}25`,
+                    }}
+                  >
+                    {n}
+                  </div>
+                  <div className="pt-2">
+                    <h3 className="mb-1.5 text-lg font-bold" style={{ color: C.cream }}>{title}</h3>
+                    <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{desc}</p>
+                  </div>
+                </div>
+              </AnimatedContent>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ─────────────────────────────────────────────────────────────── */}
+      <section className="py-28">
+        <div className="mx-auto max-w-5xl px-4">
+          <AnimatedContent>
+            <div
+              className="relative overflow-hidden rounded-3xl p-12 text-center lg:p-20"
+              style={{
+                background: `linear-gradient(135deg, #253229 0%, #1c2b22 100%)`,
+                border: `1px solid ${C.rose}30`,
+                boxShadow: `0 0 80px ${C.rose}18`,
+              }}
+            >
+              <div
+                className="pointer-events-none absolute inset-0 rounded-3xl"
+                style={{ background: `radial-gradient(ellipse 80% 60% at 50% 0%, ${C.rose}22, transparent 65%)` }}
+              />
+              <div className="relative z-10">
+                <span
+                  className="mb-6 inline-block rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
+                  style={{ background: `${C.rose}18`, border: `1px solid ${C.rose}35`, color: C.rose }}
+                >
+                  Get started today — it&apos;s free
+                </span>
+                <h2 className="mb-6 text-4xl font-black lg:text-5xl" style={{ color: C.cream }}>
+                  Stop leaving money on the{" "}
+                  <span style={{
+                    background: `linear-gradient(135deg, ${C.rose}, ${C.cream})`,
+                    WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+                  }}>exchange table</span>
+                </h2>
+                <p className="mx-auto mb-10 max-w-xl text-lg" style={{ color: C.muted }}>
+                  Join international students, migrant workers, and global citizens who time transfers with AI signals and settle bills via stablecoin rails. Built for students today, designed to scale for underbanked populations worldwide.
+                </p>
+                <Magnet padding={80} magnetStrength={3}>
+                  <a
+                    href="/login"
+                    className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-[#A27B5C] px-10 py-4 text-base font-bold text-[#2C3930] shadow-[0_0_50px_#A27B5C40] transition-all hover:bg-[#DCD7C9] hover:shadow-[0_0_70px_#DCD7C950]"
+                  >
+                    <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                    <span className="relative flex items-center gap-2">Start for free <ArrowRight size={16} /></span>
+                  </a>
+                </Magnet>
+              </div>
+            </div>
+          </AnimatedContent>
+        </div>
+      </section>
+
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <footer className="pb-10 pt-16" style={{ borderTop: `1px solid ${C.border}` }}>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-12 flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
+            <div>
+              <div className="mb-3 flex items-center gap-2.5">
+                <img src="logo_v1.png" className="h-[6.75rem] w-auto" alt="Revellio" />
+                <span className="text-xl font-extrabold" style={{ color: C.cream }}>Revellio</span>
+              </div>
+              <p className="max-w-sm text-sm" style={{ color: C.muted }}>
+                AI-powered global finance for anyone managing cross-border payments. Built for students today, designed to scale for migrant workers, freelancers, and underbanked populations worldwide. Financial inclusion through technology.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              {[Globe, Mail].map((Icon, i) => (
+                <a
+                  key={i}
+                  href="#"
+                  className="flex h-10 w-10 items-center justify-center rounded-full transition-all"
+                  style={{ border: `1px solid ${C.border}`, color: C.muted }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = `${C.rose}60`; el.style.color = C.rose; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = C.border; el.style.color = C.muted; }}
+                >
+                  <Icon size={16} />
+                </a>
+              ))}
+            </div>
+          </div>
+          <div className="pt-8 text-center text-xs" style={{ borderTop: `1px solid ${C.border}`, color: `${C.muted}` }}>
+            © {new Date().getFullYear()} Revellio. Built for students, designed for worldwide financial inclusion.
+          </div>
+        </div>
       </footer>
     </div>
   );

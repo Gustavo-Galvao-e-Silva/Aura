@@ -28,10 +28,12 @@ class FXData(BaseModel):
     conviction_score: int
 
 # Initialize Browser Use Client
-bu_client = AsyncBrowserUse(api_key=os.getenv("BROWSER_USE_API_KEY"))
+from my_fastapi_app.app.settings import settings
+
+bu_client = AsyncBrowserUse(api_key=settings.BROWSER_USE_API_KEY)
 
 # 1. Initialize the standard Client
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 current_model_id = "gemini-3.1-flash-lite-preview"
 
 async def fx_strategist_node(state: AuraState):

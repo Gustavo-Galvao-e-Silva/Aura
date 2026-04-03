@@ -1,6 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
-import { Banknote, TrendingDown, CircleDollarSign } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Banknote,
+  TrendingDown,
+  CircleDollarSign,
+  TrendingUp,
+  Clock,
+} from "lucide-react";
 import Navbar from "../components/Navbar";
+import MarketAnalysisCard from "../components/MarketAnalysisCard";
+import Modal from "../components/Modal";
+import { useUser } from "@clerk/react-router";
+
+const C = {
+  bg: "#2C3930",
+  surface: "rgba(63,79,68,0.18)",
+  border: "rgba(162,123,92,0.1)",
+  rose: "#A27B5C",
+  cream: "#DCD7C9",
+  muted: "rgba(220,215,201,0.5)",
+};
 
 type BillRecommendation = "Pay Now" | "Wait" | "Track";
 type FilterType =
@@ -11,6 +29,24 @@ type FilterType =
   | "predicted"
   | "confirmed";
 
+type MarketMetrics = {
+  selic_rate: number | null;
+  fed_funds_rate: number | null;
+  oil_price_usd: number | null;
+  fiscal_health_score: number | null;
+  geopolitical_risk_score: number | null;
+  political_stability_score: number | null;
+  fetched_at: string | null;
+};
+
+type MarketAnalysis = {
+  prediction: "BULLISH" | "BEARISH" | "NEUTRAL";
+  confidence: number;
+  thesis: string;
+  risk_flags: string[];
+  metrics: MarketMetrics;
+};
+
 type StatusResponse = {
   payment_decisions: PaymentDecision[];
   route_options: RouteOption[];
@@ -19,6 +55,7 @@ type StatusResponse = {
   current_fx_rate: number;
   pending_liabilities: unknown[];
   market_prediction: string;
+  market_analysis: MarketAnalysis | null;
   selected_route: string | null;
   audit_hash: string | null;
 };
@@ -41,7 +78,7 @@ type RouteOption = {
   eta_hours: number;
   is_instant: boolean;
   description: string;
-  brl_received: number;
+  brl_cost: number;
   reference_usd: number;
 };
 
@@ -55,6 +92,23 @@ type ScheduledBill = {
   note: string;
   category: string;
   isPredicted: boolean;
+};
+
+type SettlementReceipt = {
+  billName: string;
+  status: string;
+  message: string;
+  liability_id: number;
+  liability_name: string;
+  amount_usd: number;
+  amount_brl_spent: number;
+  fx_rate: number;
+  fx_provider?: string;
+  stellar_mint_tx?: string | null;
+  stellar_swap_tx?: string | null;
+  database_transaction_id: number;
+  new_balance_brl: number;
+  new_balance_usd: number;
 };
 
 function getRecommendationFromDecision(
@@ -86,10 +140,17 @@ function getCategoryFromName(name: string): string {
 }
 
 export default function BillScheduler() {
+  const { user } = useUser();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("all");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingPayment, setProcessingPayment] = useState<number | null>(
+    null
+  );
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [settlementReceipt, setSettlementReceipt] =
+    useState<SettlementReceipt | null>(null);
 
   function formatCurrency(value: number, currency: "USD" | "BRL") {
     return new Intl.NumberFormat(currency === "BRL" ? "pt-BR" : "en-US", {
@@ -100,54 +161,130 @@ export default function BillScheduler() {
 
   function getTabClass(filter: FilterType) {
     const isActive = selectedFilter === filter;
-
     return isActive
-      ? "border-b-2 border-blue-700 px-4 py-3 text-sm font-bold text-blue-700 sm:px-6"
-      : "border-b-2 border-transparent px-4 py-3 text-sm font-bold text-slate-400 transition-colors hover:text-slate-600 sm:px-6";
+      ? "border-b-2 px-4 py-3 text-sm font-bold sm:px-6"
+      : "border-b-2 border-transparent px-4 py-3 text-sm font-bold transition-colors sm:px-6";
   }
 
-  function getRecommendationBadge(recommendation: BillRecommendation) {
+  function getTabStyle(filter: FilterType): React.CSSProperties {
+    const isActive = selectedFilter === filter;
+    return isActive
+      ? { borderColor: C.rose, color: C.rose }
+      : { color: C.muted };
+  }
+
+  function getRecommendationBadgeStyle(
+    recommendation: BillRecommendation
+  ): React.CSSProperties {
     switch (recommendation) {
       case "Pay Now":
-        return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+        return {
+          background: "rgba(52,211,153,0.15)",
+          color: "#34d399",
+        };
       case "Wait":
-        return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+        return {
+          background: "rgba(245,158,11,0.15)",
+          color: "#f59e0b",
+        };
       case "Track":
-        return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+        return {
+          background: "rgba(162,123,92,0.15)",
+          color: C.rose,
+        };
       default:
-        return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+        return {
+          background: "rgba(220,215,201,0.08)",
+          color: C.cream,
+        };
     }
   }
 
-  function getPredictionBadgeClass(isPredicted: boolean) {
+  function getPredictionBadgeStyle(isPredicted: boolean): React.CSSProperties {
     return isPredicted
-      ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
-      : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+      ? {
+          background: "rgba(168,85,247,0.15)",
+          color: "#c084fc",
+        }
+      : {
+          background: "rgba(220,215,201,0.08)",
+          color: C.cream,
+        };
   }
+
+  const loadStatus = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const url = new URL("http://localhost:8000/agents/status");
+      if (user?.username) url.searchParams.set("username", user.username);
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error(`Failed to fetch /status: ${response.status}`);
+      }
+
+      const data: StatusResponse = await response.json();
+      setStatus(data);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.username]);
 
   useEffect(() => {
-    async function loadStatus() {
-      try {
-        setLoading(true);
-        setError(null);
+    loadStatus();
+  }, [loadStatus]);
 
-        const response = await fetch("http://localhost:8000/status");
-        if (!response.ok) {
-          throw new Error(`Failed to fetch /status: ${response.status}`);
-        }
-
-        const data: StatusResponse = await response.json();
-        setStatus(data);
-      } catch (err) {
-        console.error(err);
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
+  async function handlePayBill(bill: ScheduledBill) {
+    if (bill.recommendation !== "Pay Now") {
+      alert("Schedule/Track functionality coming soon!");
+      return;
     }
 
-    loadStatus();
-  }, []);
+    setProcessingPayment(bill.id);
+    setPaymentError(null);
+
+    try {
+      const username = user?.username ?? "testuser";
+      const response = await fetch("http://localhost:8000/payments/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          liability_id: bill.id,
+        }),
+      });
+
+      if (!response.ok) {
+        let detail = `Payment failed (${response.status})`;
+        try {
+          const body = await response.json();
+          if (body?.detail) detail = String(body.detail);
+        } catch {
+          // Keep fallback message when backend doesn't return JSON.
+        }
+        throw new Error(detail);
+      }
+
+      const result = (await response.json()) as SettlementReceipt;
+      setSettlementReceipt({
+        ...result,
+        billName: bill.name,
+      });
+
+      await loadStatus();
+    } catch (err) {
+      console.error("Payment error:", err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setPaymentError(message);
+      alert(`Payment failed: ${message}`);
+    } finally {
+      setProcessingPayment(null);
+    }
+  }
 
   const bills: ScheduledBill[] = useMemo(() => {
     if (!status?.payment_decisions) return [];
@@ -178,169 +315,290 @@ export default function BillScheduler() {
   const bestRoute = status?.route_options?.[0];
 
   return (
-    <div className="bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+    <div
+      className="font-sans antialiased"
+      style={{ background: C.bg, color: C.cream }}
+    >
       <div className="flex min-h-screen overflow-hidden">
         <Navbar />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <header className="flex flex-col justify-between gap-4 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:px-8">
+          <header
+            className="flex flex-col justify-between gap-4 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:px-8"
+            style={{ borderBottom: `1px solid ${C.border}` }}
+          >
             <div>
-              <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+              <h2
+                className="text-2xl font-extrabold tracking-tight sm:text-3xl"
+                style={{ color: C.cream }}
+              >
                 Bill Scheduler
               </h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 sm:text-base">
+              <p
+                className="mt-1 text-sm sm:text-base"
+                style={{ color: C.muted }}
+              >
                 Optimize when to pay your international bills based on FX timing
               </p>
             </div>
           </header>
 
-          <div className="grid grid-cols-1 gap-4 px-4 py-2 sm:px-6 md:grid-cols-3 lg:px-8">
-            <div className="rounded-2xl border border-blue-700/5 bg-white p-5 shadow-sm dark:bg-slate-900">
+          <div className="grid grid-cols-1 gap-4 px-4 py-4 sm:px-6 md:grid-cols-3 lg:px-8">
+            {/* Current USD/BRL */}
+            <div
+              className="rounded-2xl p-5"
+              style={{ background: C.surface, border: `1px solid ${C.border}` }}
+            >
               <div className="mb-4 flex items-start justify-between">
-                <div className="rounded-lg bg-blue-700/10 p-2 text-blue-700">
+                <div
+                  className="rounded-lg p-2"
+                  style={{ background: `${C.rose}18`, color: C.rose }}
+                >
                   <TrendingDown className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-bold tracking-wide text-slate-400 sm:text-xs">
+                <span
+                  className="text-[10px] font-bold tracking-wide sm:text-xs"
+                  style={{ color: C.muted }}
+                >
                   CURRENT USD/BRL
                 </span>
               </div>
-              <p className="text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
+              <p
+                className="text-xl font-black sm:text-2xl"
+                style={{ color: C.cream }}
+              >
                 {bestRoute ? formatCurrency(bestRoute.fx_used, "BRL") : "—"}
               </p>
-              <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+              <p
+                className="mt-1 flex items-center gap-1 text-xs"
+                style={{ color: "#34d399" }}
+              >
+                <TrendingUp className="h-3.5 w-3.5" />
                 {status?.market_prediction
                   ? `${status.market_prediction} market signal`
                   : "No market data"}
               </p>
             </div>
 
-            <div className="rounded-2xl border border-blue-700/5 bg-white p-5 shadow-sm dark:bg-slate-900">
+            {/* Market Signal */}
+            <div
+              className="rounded-2xl p-5"
+              style={{ background: C.surface, border: `1px solid ${C.border}` }}
+            >
               <div className="mb-4 flex items-start justify-between">
-                <div className="rounded-lg bg-yellow-100 p-2 text-yellow-600">
+                <div
+                  className="rounded-lg p-2"
+                  style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}
+                >
                   <CircleDollarSign className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-bold tracking-wide text-slate-400 sm:text-xs">
+                <span
+                  className="text-[10px] font-bold tracking-wide sm:text-xs"
+                  style={{ color: C.muted }}
+                >
                   MARKET SIGNAL
                 </span>
               </div>
-              <p className="text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
+              <p
+                className="text-xl font-black sm:text-2xl"
+                style={{ color: C.cream }}
+              >
                 {status?.market_prediction ?? "—"}
               </p>
-              <p className="mt-1 whitespace-pre-line text-xs text-slate-500">
+              <p
+                className="mt-1 whitespace-pre-line text-xs"
+                style={{ color: C.muted }}
+              >
                 {status?.selected_route ?? "No recommendation available"}
               </p>
             </div>
 
+            {/* Best route */}
+            <div
+              className="rounded-2xl p-5"
+              style={{ background: C.surface, border: `1px solid ${C.border}` }}
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div
+                  className="rounded-lg p-2"
+                  style={{ background: `${C.rose}18`, color: C.rose }}
+                >
+                  <Clock className="h-5 w-5" />
+                </div>
+                <span
+                  className="text-[10px] font-bold tracking-wide sm:text-xs"
+                  style={{ color: C.muted }}
+                >
+                  BEST ROUTE
+                </span>
+              </div>
+              <p
+                className="text-xl font-black sm:text-2xl"
+                style={{ color: C.cream }}
+              >
+                {bestRoute?.provider ?? "—"}
+              </p>
+              <p className="mt-1 text-xs" style={{ color: C.muted }}>
+                {bestRoute?.description ?? "No route details available"}
+              </p>
+            </div>
           </div>
 
-          <div className="mt-4 px-4 sm:px-6 lg:px-8">
+          {/* Market Analysis */}
+          <div className="px-4 pb-2 sm:px-6 lg:px-8">
+            <MarketAnalysisCard analysis={status?.market_analysis ?? undefined} />
+          </div>
+
+          {/* Tabs */}
+          <div className="mt-2 px-4 sm:px-6 lg:px-8">
             <div className="overflow-x-auto">
-              <div className="flex min-w-max border-b border-blue-700/10">
-                <button
-                  className={getTabClass("all")}
-                  onClick={() => setSelectedFilter("all")}
-                >
-                  All Bills
-                </button>
-                <button
-                  className={getTabClass("pay-now")}
-                  onClick={() => setSelectedFilter("pay-now")}
-                >
-                  Pay Now
-                </button>
-                <button
-                  className={getTabClass("wait")}
-                  onClick={() => setSelectedFilter("wait")}
-                >
-                  Wait
-                </button>
-                <button
-                  className={getTabClass("track")}
-                  onClick={() => setSelectedFilter("track")}
-                >
-                  Track
-                </button>
-                <button
-                  className={getTabClass("predicted")}
-                  onClick={() => setSelectedFilter("predicted")}
-                >
-                  Predicted
-                </button>
-                <button
-                  className={getTabClass("confirmed")}
-                  onClick={() => setSelectedFilter("confirmed")}
-                >
-                  Confirmed
-                </button>
+              <div
+                className="flex min-w-max"
+                style={{ borderBottom: `1px solid ${C.border}` }}
+              >
+                {(
+                  [
+                    "all",
+                    "pay-now",
+                    "wait",
+                    "track",
+                    "predicted",
+                    "confirmed",
+                  ] as FilterType[]
+                ).map((filter) => (
+                  <button
+                    key={filter}
+                    className={getTabClass(filter)}
+                    style={getTabStyle(filter)}
+                    onClick={() => setSelectedFilter(filter)}
+                  >
+                    {filter === "all"
+                      ? "All Bills"
+                      : filter === "pay-now"
+                        ? "Pay Now"
+                        : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
+          {/* Table / Cards */}
           <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-            <div className="rounded-2xl border border-blue-700/5 bg-white shadow-sm dark:bg-slate-900">
+            <div
+              className="rounded-2xl"
+              style={{ background: C.surface, border: `1px solid ${C.border}` }}
+            >
               {loading ? (
-                <div className="px-6 py-10 text-center text-slate-500">
+                <div className="px-6 py-10 text-center" style={{ color: C.muted }}>
                   Loading bill recommendations...
                 </div>
               ) : error ? (
-                <div className="px-6 py-10 text-center text-red-500">
+                <div className="px-6 py-10 text-center" style={{ color: "#f87171" }}>
                   {error}
                 </div>
               ) : filteredBills.length === 0 ? (
-                <div className="px-6 py-10 text-center text-slate-500">
+                <div className="px-6 py-10 text-center" style={{ color: C.muted }}>
                   No bill recommendations found.
                 </div>
               ) : (
                 <>
+                  {paymentError && (
+                    <div
+                      className="mx-4 mt-4 rounded-xl px-4 py-3 text-sm"
+                      style={{
+                        background: "rgba(248,113,113,0.15)",
+                        border: "1px solid rgba(248,113,113,0.35)",
+                        color: "#fecaca",
+                      }}
+                    >
+                      {paymentError}
+                    </div>
+                  )}
+
                   <div className="hidden overflow-x-auto md:block">
                     <table className="w-full min-w-[950px] text-left">
                       <thead>
-                        <tr className="border-b border-blue-700/10 bg-slate-50 dark:bg-slate-800/50">
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                        <tr
+                          style={{
+                            borderBottom: `1px solid ${C.border}`,
+                            background: "rgba(63,79,68,0.25)",
+                          }}
+                        >
+                          <th
+                            className="px-6 py-4 text-xs font-bold uppercase tracking-wider"
+                            style={{ color: C.muted }}
+                          >
                             Bill
                           </th>
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                          <th
+                            className="px-6 py-4 text-xs font-bold uppercase tracking-wider"
+                            style={{ color: C.muted }}
+                          >
                             Type
                           </th>
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                          <th
+                            className="px-6 py-4 text-xs font-bold uppercase tracking-wider"
+                            style={{ color: C.muted }}
+                          >
                             Amount (USD)
                           </th>
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-blue-700">
+                          <th
+                            className="px-6 py-4 text-xs font-bold uppercase tracking-wider"
+                            style={{ color: C.rose }}
+                          >
                             Est. BRL
                           </th>
-                          <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                          <th
+                            className="px-6 py-4 text-xs font-bold uppercase tracking-wider"
+                            style={{ color: C.muted }}
+                          >
                             Recommendation
                           </th>
-                          <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-400">
+                          <th
+                            className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider"
+                            style={{ color: C.muted }}
+                          >
                             Actions
                           </th>
                         </tr>
                       </thead>
 
-                      <tbody className="divide-y divide-blue-700/5">
+                      <tbody style={{ borderTop: `1px solid ${C.border}` }}>
                         {filteredBills.map((bill) => (
                           <tr
                             key={bill.id}
-                            className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                            className="transition-colors"
+                            style={{ borderBottom: `1px solid ${C.border}` }}
                           >
                             <td className="px-6 py-5">
                               <div className="flex items-center gap-3">
-                                <div className="rounded-xl bg-blue-700/10 p-2 text-blue-700">
+                                <div
+                                  className="rounded-xl p-2"
+                                  style={{
+                                    background: "rgba(162,123,92,0.12)",
+                                    color: C.rose,
+                                  }}
+                                >
                                   <Banknote className="h-5 w-5" />
                                 </div>
                                 <div>
-                                  <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                  <p
+                                    className="text-sm font-bold"
+                                    style={{ color: C.cream }}
+                                  >
                                     {bill.name}
                                   </p>
 
                                   <div className="mt-1 flex items-center gap-2">
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    <p className="text-xs" style={{ color: C.muted }}>
                                       {bill.category}
                                     </p>
                                     <span
-                                      className={`rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${getPredictionBadgeClass(
+                                      className="rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-widest"
+                                      style={getPredictionBadgeStyle(
                                         bill.isPredicted
-                                      )}`}
+                                      )}
                                     >
                                       {bill.isPredicted
                                         ? "Predicted"
@@ -351,36 +609,56 @@ export default function BillScheduler() {
                               </div>
                             </td>
 
-                            <td className="px-6 py-5 text-sm text-slate-600 dark:text-slate-300">
+                            <td
+                              className="px-6 py-5 text-sm"
+                              style={{ color: C.muted }}
+                            >
                               {bill.dueIn}
                             </td>
 
-                            <td className="px-6 py-5 text-sm font-semibold text-slate-900 dark:text-white">
+                            <td
+                              className="px-6 py-5 text-sm font-semibold"
+                              style={{ color: C.cream }}
+                            >
                               {formatCurrency(bill.amountUsd, "USD")}
                             </td>
 
-                            <td className="px-6 py-5 text-sm font-semibold text-blue-700 dark:text-blue-400">
+                            <td
+                              className="px-6 py-5 text-sm font-semibold"
+                              style={{ color: C.rose }}
+                            >
                               {formatCurrency(bill.amountBrl, "BRL")}
                             </td>
 
                             <td className="px-6 py-5">
                               <div className="flex flex-col gap-1">
                                 <span
-                                  className={`w-fit rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${getRecommendationBadge(
+                                  className="w-fit rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-widest"
+                                  style={getRecommendationBadgeStyle(
                                     bill.recommendation
-                                  )}`}
+                                  )}
                                 >
                                   {bill.recommendation}
                                 </span>
-                                <p className="max-w-xs text-xs leading-tight text-slate-500 dark:text-slate-400">
+                                <p
+                                  className="max-w-xs text-xs leading-tight"
+                                  style={{ color: C.muted }}
+                                >
                                   {bill.note}
                                 </p>
                               </div>
                             </td>
 
                             <td className="px-6 py-5 text-right">
-                              <button className="rounded-xl bg-blue-700 px-4 py-2 text-xs font-bold text-white transition hover:opacity-90">
-                                {bill.recommendation === "Pay Now"
+                              <button
+                                className="rounded-xl px-4 py-2 text-xs font-bold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                style={{ background: C.rose, color: C.bg }}
+                                onClick={() => handlePayBill(bill)}
+                                disabled={processingPayment === bill.id}
+                              >
+                                {processingPayment === bill.id
+                                  ? "Processing..."
+                                  : bill.recommendation === "Pay Now"
                                   ? "Pay Bill"
                                   : bill.recommendation === "Wait"
                                     ? "Schedule"
@@ -397,22 +675,30 @@ export default function BillScheduler() {
                     {filteredBills.map((bill) => (
                       <div
                         key={bill.id}
-                        className="rounded-2xl border border-blue-700/10 p-4"
+                        className="rounded-2xl p-4"
+                        style={{
+                          background: C.surface,
+                          border: `1px solid ${C.border}`,
+                        }}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">
+                            <p
+                              className="text-sm font-bold"
+                              style={{ color: C.cream }}
+                            >
                               {bill.name}
                             </p>
 
                             <div className="mt-1 flex items-center gap-2">
-                              <p className="text-xs text-slate-500">
+                              <p className="text-xs" style={{ color: C.muted }}>
                                 {bill.category}
                               </p>
                               <span
-                                className={`rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${getPredictionBadgeClass(
+                                className="rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-widest"
+                                style={getPredictionBadgeStyle(
                                   bill.isPredicted
-                                )}`}
+                                )}
                               >
                                 {bill.isPredicted ? "Predicted" : "Confirmed"}
                               </span>
@@ -420,39 +706,56 @@ export default function BillScheduler() {
                           </div>
 
                           <span
-                            className={`rounded px-2 py-1 text-[10px] font-black uppercase tracking-widest ${getRecommendationBadge(
+                            className="rounded px-2 py-1 text-[10px] font-black uppercase tracking-widest"
+                            style={getRecommendationBadgeStyle(
                               bill.recommendation
-                            )}`}
+                            )}
                           >
                             {bill.recommendation}
                           </span>
                         </div>
 
-                        <div className="mt-4 space-y-2 text-sm">
+                        <div
+                          className="mt-4 space-y-2 text-sm"
+                          style={{ color: C.cream }}
+                        >
                           <div className="flex justify-between">
-                            <span className="text-slate-500">Type</span>
+                            <span style={{ color: C.muted }}>Type</span>
                             <span className="font-medium">{bill.dueIn}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-500">USD</span>
+                            <span style={{ color: C.muted }}>USD</span>
                             <span className="font-medium">
                               {formatCurrency(bill.amountUsd, "USD")}
                             </span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-500">BRL</span>
-                            <span className="font-semibold text-blue-700 dark:text-blue-400">
+                            <span style={{ color: C.muted }}>BRL</span>
+                            <span
+                              className="font-semibold"
+                              style={{ color: C.rose }}
+                            >
                               {formatCurrency(bill.amountBrl, "BRL")}
                             </span>
                           </div>
                         </div>
 
-                        <p className="mt-3 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                        <p
+                          className="mt-3 text-xs leading-relaxed"
+                          style={{ color: C.muted }}
+                        >
                           {bill.note}
                         </p>
 
-                        <button className="mt-4 w-full rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
-                          {bill.recommendation === "Pay Now"
+                        <button
+                          className="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                          style={{ background: C.rose, color: C.bg }}
+                          onClick={() => handlePayBill(bill)}
+                          disabled={processingPayment === bill.id}
+                        >
+                          {processingPayment === bill.id
+                            ? "Processing..."
+                            : bill.recommendation === "Pay Now"
                             ? "Pay Bill"
                             : bill.recommendation === "Wait"
                               ? "Schedule"
@@ -467,6 +770,113 @@ export default function BillScheduler() {
           </div>
         </main>
       </div>
+
+      <Modal
+        isOpen={settlementReceipt !== null}
+        onClose={() => setSettlementReceipt(null)}
+      >
+        {settlementReceipt && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-xl font-bold" style={{ color: C.cream }}>
+                Payment successful
+              </h3>
+              <p className="mt-1 text-sm" style={{ color: C.muted }}>
+                {settlementReceipt.message || "Your bill was settled successfully."}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  Bill
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {settlementReceipt.liability_name || settlementReceipt.billName}
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  Status
+                </p>
+                <p className="font-semibold" style={{ color: "#34d399" }}>
+                  {settlementReceipt.status}
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  Amount Settled
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {formatCurrency(settlementReceipt.amount_usd, "USD")}
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  BRL Spent
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {formatCurrency(settlementReceipt.amount_brl_spent, "BRL")}
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  FX Rate
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {settlementReceipt.fx_rate.toFixed(4)} BRL/USD
+                </p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(63,79,68,0.3)", border: `1px solid ${C.border}` }}>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: C.muted }}>
+                  FX Provider
+                </p>
+                <p className="font-semibold" style={{ color: C.cream }}>
+                  {settlementReceipt.fx_provider ?? "Best available route"}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3 text-sm" style={{ border: `1px solid ${C.border}`, background: "rgba(162,123,92,0.1)" }}>
+              <p className="mb-2 font-semibold" style={{ color: C.rose }}>
+                Blockchain audit trail
+              </p>
+              <p className="text-xs" style={{ color: C.muted }}>Network: Stellar Testnet</p>
+              <p className="mt-1 break-all font-mono text-xs" style={{ color: C.cream }}>
+                Mint TX: {settlementReceipt.stellar_mint_tx ?? "N/A"}
+              </p>
+              <p className="mt-1 break-all font-mono text-xs" style={{ color: C.cream }}>
+                Swap TX: {settlementReceipt.stellar_swap_tx ?? "N/A"}
+              </p>
+              <p className="mt-1 text-xs" style={{ color: C.muted }}>
+                Database TX ID: {settlementReceipt.database_transaction_id}
+              </p>
+            </div>
+
+            <div className="rounded-xl p-3 text-sm" style={{ border: `1px solid ${C.border}`, background: "rgba(63,79,68,0.22)" }}>
+              <p className="mb-2 font-semibold" style={{ color: C.cream }}>
+                Updated wallet balances
+              </p>
+              <p style={{ color: C.cream }}>
+                BRL: {formatCurrency(settlementReceipt.new_balance_brl, "BRL")}
+              </p>
+              <p style={{ color: C.cream }}>
+                USD: {formatCurrency(settlementReceipt.new_balance_usd, "USD")}
+              </p>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setSettlementReceipt(null)}
+                className="rounded-lg px-4 py-2 text-sm font-semibold transition hover:opacity-90"
+                style={{ background: C.rose, color: C.bg }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

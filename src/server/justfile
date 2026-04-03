@@ -1,6 +1,42 @@
-# Aura Development Commands
+# Revellio Development Commands
 
-# Start the database and adminer
+# ============================================================================
+# DOCKER MODE (Full Stack - from repository root)
+# ============================================================================
+
+# Start full stack (backend + frontend + db) in Docker
+stack-up:
+	cd ../.. && docker compose up -d
+
+# Stop full stack
+stack-down:
+	cd ../.. && docker compose down
+
+# Rebuild and restart full stack
+stack-restart:
+	cd ../.. && docker compose down && docker compose up -d --build
+
+# View logs from all services
+stack-logs:
+	cd ../.. && docker compose logs -f
+
+# View logs from backend only
+backend-logs:
+	cd ../.. && docker compose logs -f backend
+
+# View logs from frontend only
+frontend-logs:
+	cd ../.. && docker compose logs -f frontend
+
+# Wipe everything (including volumes)
+stack-wipe:
+	cd ../.. && docker compose down -v
+
+# ============================================================================
+# NATIVE MODE (Local Development - existing commands)
+# ============================================================================
+
+# Start the database and adminer (native mode)
 up:
 	docker compose up -d
 
@@ -10,7 +46,7 @@ wipe:
 
 # Start the FastAPI server
 dev:
-	PYTHONPATH=. uvicorn my_fastapi_app.app.main:app --reload
+	PYTHONPATH=. .venv/bin/uvicorn my_fastapi_app.app.main:app --reload
 
 # Enter the Postgres Shell inside Docker
 db:
@@ -28,8 +64,43 @@ upload file:
 status:
 	curl -s http://localhost:8000/status | jq .
 
+# Install dependencies (production)
 pip:
-	pip install -r requirements.txt
+	pip install .
+
+# Install dependencies with dev tools (for local development)
+pip-dev:
+	pip install -e ".[dev]"
+
+# ============================================================================
+# DATABASE MIGRATIONS (Alembic)
+# ============================================================================
+
+# Create a new migration (autogenerate from model changes)
+# Usage: just migrate "add user email column"
+migrate message:
+	PYTHONPATH=. .venv/bin/alembic revision --autogenerate -m "{{message}}"
+
+# Apply all pending migrations
+upgrade:
+	PYTHONPATH=. .venv/bin/alembic upgrade head
+
+# Rollback one migration
+downgrade:
+	PYTHONPATH=. .venv/bin/alembic downgrade -1
+
+# Show current migration version
+migration-current:
+	PYTHONPATH=. .venv/bin/alembic current
+
+# Show migration history
+migration-history:
+	PYTHONPATH=. .venv/bin/alembic history --verbose
+
+# Rollback to specific revision
+# Usage: just migration-goto abc123
+migration-goto revision:
+	PYTHONPATH=. .venv/bin/alembic downgrade {{revision}}
 
 thanks:
 	echo thanks nando

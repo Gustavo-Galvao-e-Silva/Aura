@@ -8,4 +8,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    // Allows your specific hostname
+    allowedHosts: ['laptop-nixos'], 
+    
+    // NOTE: If you are running this inside Docker (which it looks like 
+    // you might be based on your project files), you usually also need 
+    // to expose the host so it listens on all network interfaces:
+    host: true, 
+  }
 })

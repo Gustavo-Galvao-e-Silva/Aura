@@ -6,11 +6,20 @@ pydantic
 fastapi
 uvicorn[standard]
 SQLAlchemy
+asyncpg
 psycopg2-binary
+pydantic-settings
 python-dotenv
 python-multipart
 Pillow
 requests
 browser-use-sdk
 playwright
+# Market data — API-first researcher nodes
+fredapi
+wbgapi
+yfinance
+python-bcb
+# Search & sentiment researcher node
+tavily-python
 stellar-sdk

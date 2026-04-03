@@ -1,0 +1,68 @@
+# Revellio Full Stack - Docker Compose (Supabase Configuration)
+#
+# This orchestrates the entire application:
+# - Backend (FastAPI) → connects to Supabase
+# - Frontend (React/Vite)
+#
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop all services
+
+version: '3.8'
+
+services:
+
+  # Backend: FastAPI + LangGraph Agents
+  backend:
+    build:
+      context: ./src/server
+      dockerfile: Dockerfile
+    container_name: revellio-backend
+    restart: unless-stopped
+    command: uvicorn my_fastapi_app.app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./src/server/.env
+    environment:
+      # Use Supabase connection from .env (no local db override)
+      # DATABASE_URL from .env will be used automatically
+      # Force Python unbuffered output for real-time logs in Docker
+      PYTHONUNBUFFERED: 1
+    volumes:
+      # Mount source code for hot reload
+      - ./src/server:/app
+      # Exclude cache and virtual envs from sync
+      - /app/__pycache__
+      - /app/.venv
+      - /app/.pytest_cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend: React + Vite
+  frontend:
+    build:
+      context: ./src/client
+      dockerfile: Dockerfile
+    container_name: revellio-frontend
+    restart: unless-stopped
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      # Mount source for hot reload
+      - ./src/client:/app
+      # Exclude node_modules (use container's version)
+      - /app/node_modules
+    depends_on:
+      - backend
+
+# No volumes needed - using Supabase (cloud database)
+# If you want to run a local PostgreSQL for offline dev, see docker-compose.local.yml

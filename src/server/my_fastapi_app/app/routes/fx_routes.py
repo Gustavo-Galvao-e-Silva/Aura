@@ -1,17 +1,10 @@
-import os
-
 import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import CotationNotify
-from my_fastapi_app.app.config import (
-    CREBIT_API_URL,
-    WISE_API_URL,
-    REMITLY_API_URL,
-    HTTP_CLIENT_TIMEOUT,
-)
+from my_fastapi_app.app.settings import settings
 from my_fastapi_app.app.db.session import get_db
 
 router = APIRouter(prefix="/fx", tags=["FX Routes"])
@@ -28,24 +21,19 @@ async def get_fx_provider_rates():
     """
     Compare real-time exchange rates from multiple FX providers.
 
-    Queries Crebit, Wise, and Remitly APIs to get current USD/BRL rates
-    and calculates the optimal route for currency conversion.
-
-    Returns rate comparisons showing BRL received per $1000 USD sent.
+    Queries Crebit, OFX, and Remitly for current USD/BRL rates.
     """
-    wise_api_key = os.getenv("WISE_API_KEY")
-
     parsed = {
         "crebit": None,
-        "wise": None,
+        "ofx": None,
         "remitly": None,
     }
 
-    async with httpx.AsyncClient(timeout=HTTP_CLIENT_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=settings.HTTP_CLIENT_TIMEOUT) as client:
         # CREBIT
         try:
             crebit_response = await client.post(
-                CREBIT_API_URL,
+                settings.CREBIT_API_URL,
                 json={
                     "symbol": "USDC/BRL",
                     "quote_type": "on_ramp",
@@ -68,41 +56,22 @@ async def get_fx_provider_rates():
                 "error": str(e),
             }
 
-        # WISE
+        # OFX — live commercial USD/BRL ask rate via AwesomeAPI (no auth required)
         try:
-            wise_headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
-
-            if wise_api_key:
-                wise_headers["Authorization"] = f"Bearer {wise_api_key}"
-
-            wise_response = await client.post(
-                WISE_API_URL,
-                json={
-                    "sourceCurrency": "USD",
-                    "targetCurrency": "BRL",
-                    "sourceAmount": 1,
-                },
-                headers=wise_headers,
+            ofx_response = await client.get(
+                "https://economia.awesomeapi.com.br/json/last/USD-BRL",
+                headers={"Accept": "application/json"},
             )
+            ofx_json = ofx_response.json()
+            ofx_rate = ofx_json.get("USDBRL", {}).get("ask")
 
-            wise_json = wise_response.json()
-
-            wise_rate = (
-                wise_json.get("rate")
-                or wise_json.get("price", {}).get("rate")
-                or wise_json.get("paymentOptions", [{}])[0].get("rate")
-            )
-
-            parsed["wise"] = {
-                "provider": "wise",
-                "rate": float(wise_rate) if wise_rate is not None else None,
+            parsed["ofx"] = {
+                "provider": "ofx",
+                "rate": float(ofx_rate) if ofx_rate is not None else None,
             }
         except Exception as e:
-            parsed["wise"] = {
-                "provider": "wise",
+            parsed["ofx"] = {
+                "provider": "ofx",
                 "rate": None,
                 "error": str(e),
             }
@@ -110,7 +79,7 @@ async def get_fx_provider_rates():
         # REMITLY
         try:
             remitly_response = await client.get(
-                REMITLY_API_URL,
+                settings.REMITLY_API_URL,
                 params={
                     "conduit": "USA:USD-BRA:BRL",
                     "anchor": "SEND",
@@ -148,7 +117,7 @@ async def get_fx_provider_rates():
 
 
 @router.post("/alerts")
-async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
+async def set_quote_alert(data: QuoteAlertDTO, db: AsyncSession = Depends(get_db)):
     """
     Set up an email alert for target exchange rate.
 
@@ -165,8 +134,8 @@ async def set_quote_alert(data: QuoteAlertDTO, db: Session = Depends(get_db)):
     )
 
     db.add(target_quote)
-    db.commit()
-    db.refresh(target_quote)
+    await db.commit()
+    await db.refresh(target_quote)
 
     return {
         "status": "success",

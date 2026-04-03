@@ -1,52 +1,158 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUser } from "@clerk/react-router";
 import {
-  BellDot,
-  Clock,
-  House,
-  School,
-  ScrollText,
-  ShoppingCart,
-  TrendingUp,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
+} from "recharts";
+import {
+  Bell, Clock, House, School, ScrollText, ShoppingCart,
+  TrendingDown, TrendingUp, DollarSign,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
+import { motion } from "framer-motion";
 import Navbar from "../components/Navbar";
 import apiClient from "../API/client";
+import createUser from "../API/UserClient";
 
+// ─── palette ──────────────────────────────────────────────────────────────────
+const C = {
+  bg:    "#2C3930",
+  deep:  "#1a2420",
+  card:  "rgba(30,41,34,0.98)",
+  cardAlt: "rgba(63,79,68,0.18)",
+  border: "rgba(162,123,92,0.15)",
+  rose:  "#A27B5C",
+  cream: "#DCD7C9",
+  muted: "rgba(220,215,201,0.5)",
+  green: "#34d399",
+  red:   "#f87171",
+};
+
+// ─── types ────────────────────────────────────────────────────────────────────
 type Liability = {
-  id: number;
-  username: string;
-  name: string;
-  amount: number;
-  currency: string;
-  due_date: string;
-  is_predicted: boolean;
-  is_paid: boolean;
-  category: string | null;
-  priority_level: number;
+  id: number; username: string; name: string; amount: number;
+  currency: string; due_date: string; is_predicted: boolean;
+  is_paid: boolean; category: string | null; priority_level: number;
   created_at: string;
 };
+type DashboardExpensesResponse = { count: number; next_liability: Liability | null };
+type FrankfurterTimeSeries = { base: string; start_date: string; end_date: string; rates: Record<string, { BRL: number }> };
+type FrankfurterLatest    = { base: string; date: string; rates: { BRL: number } };
 
-type DashboardExpensesResponse = {
-  count: number;
-  next_liability: Liability | null;
-};
+// ─── Card ─────────────────────────────────────────────────────────────────────
+function Card({ children, className = "", style = {} }: {
+  children: React.ReactNode; className?: string; style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={`rounded-2xl ${className}`}
+      style={{ background: C.card, border: `1px solid ${C.border}`, ...style }}
+    >
+      {children}
+    </div>
+  );
+}
 
-type FrankfurterTimeSeries = {
-  base: string;
-  start_date: string;
-  end_date: string;
-  rates: Record<string, { BRL: number }>;
-};
+// ─── ReactBits: SpotlightCard ─────────────────────────────────────────────────
+function SpotlightCard({ children, className = "", style = {} }: {
+  children: React.ReactNode; className?: string; style?: React.CSSProperties;
+}) {
+  const ref     = useRef<HTMLDivElement>(null);
+  const spotRef = useRef<HTMLDivElement>(null);
 
-type FrankfurterLatest = {
-  base: string;
-  date: string;
-  rates: {
-    BRL: number;
+  const onMove = (e: React.MouseEvent) => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect || !spotRef.current) return;
+    spotRef.current.style.background =
+      `radial-gradient(350px circle at ${e.clientX - rect.left}px ${e.clientY - rect.top}px, rgba(162,123,92,0.1), transparent 70%)`;
+    spotRef.current.style.opacity = "1";
   };
-};
 
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={() => { if (spotRef.current) spotRef.current.style.opacity = "0"; }}
+      className={`relative overflow-hidden ${className}`}
+      style={style}
+    >
+      <div ref={spotRef} style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0, transition: "opacity 0.3s", borderRadius: "inherit" }} />
+      {children}
+    </div>
+  );
+}
+
+// ─── ReactBits: CountUp ───────────────────────────────────────────────────────
+function CountUp({ to, decimals = 0, duration = 1200 }: { to: number; decimals?: number; duration?: number }) {
+  const [val, setVal] = useState(0);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (to === 0) { setVal(0); return; }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / duration, 1);
+      setVal((1 - Math.pow(1 - t, 3)) * to);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else setVal(to);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [to, duration]);
+
+  return <>{val.toFixed(decimals)}</>;
+}
+
+// ─── ReactBits: ShimmerButton ─────────────────────────────────────────────────
+function ShimmerButton({ children, onClick, disabled }: {
+  children: React.ReactNode; onClick?: () => void; disabled?: boolean;
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      disabled={disabled}
+      whileHover={{ scale: disabled ? 1 : 1.04 }}
+      whileTap={{ scale: disabled ? 1 : 0.96 }}
+      className="relative overflow-hidden rounded-xl px-5 py-2 text-sm font-bold disabled:opacity-50 shrink-0"
+      style={{ background: C.rose, color: C.bg }}
+    >
+      <motion.div
+        style={{ position: "absolute", top: 0, bottom: 0, width: "50%", pointerEvents: "none",
+          background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)" }}
+        animate={{ x: ["-130%", "280%"] }}
+        transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 1, ease: "easeInOut" }}
+      />
+      <span className="relative z-10">{children}</span>
+    </motion.button>
+  );
+}
+
+// ─── ReactBits: PulseDot ──────────────────────────────────────────────────────
+function PulseDot({ color = C.green }: { color?: string }) {
+  return (
+    <span className="relative flex h-2 w-2 shrink-0">
+      <motion.span className="absolute inline-flex h-full w-full rounded-full" style={{ background: color }}
+        animate={{ scale: [1, 2.4], opacity: [0.6, 0] }}
+        transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
+      />
+      <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: color }} />
+    </span>
+  );
+}
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl px-3 py-2 text-xs font-semibold shadow-xl"
+      style={{ background: C.deep, border: `1px solid ${C.border}`, color: C.cream }}>
+      <p style={{ color: C.muted }}>{label}</p>
+      <p style={{ color: C.rose }}>{payload[0].value?.toFixed(4)} BRL</p>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { isLoaded, isSignedIn, user } = useUser();
   const navigate = useNavigate();
@@ -54,8 +160,7 @@ export default function Dashboard() {
   const [upcomingExpenses, setUpcomingExpenses] = useState<Liability[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
 
-  const [dashboardSummary, setDashboardSummary] =
-    useState<DashboardExpensesResponse | null>(null);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardExpensesResponse | null>(null);
   const [dashboardSummaryLoading, setDashboardSummaryLoading] = useState(true);
 
   const [fxSeries, setFxSeries] = useState<{ date: string; value: number }[]>([]);
@@ -66,497 +171,330 @@ export default function Dashboard() {
   const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
 
   useEffect(() => {
-    if (isLoaded && (!isSignedIn || !user)) {
-      navigate("/");
-    }
+    if (isLoaded && (!isSignedIn || !user)) navigate("/");
   }, [isLoaded, isSignedIn, user, navigate]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user?.username) return;
-
-    async function fetchDashboardSummary() {
-      try {
-        setDashboardSummaryLoading(true);
-
-        const response = await apiClient.get("/dashboard-expenses", {
-          params: {
-            username: user!.username,
-          },
-        });
-
-        setDashboardSummary(response.data);
-      } catch (error) {
-        console.error("Failed to fetch dashboard summary:", error);
-      } finally {
-        setDashboardSummaryLoading(false);
-      }
-    }
-
-    fetchDashboardSummary();
+    createUser({
+      fullName: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username,
+      email: user.primaryEmailAddress?.emailAddress ?? user.emailAddresses?.[0]?.emailAddress ?? "",
+      username: user.username,
+    }).catch(() => {});
   }, [isLoaded, isSignedIn, user?.username]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user?.username) return;
-
-    async function fetchUpcomingExpenses() {
+    (async () => {
       try {
-        setExpensesLoading(true);
-
-        const response = await apiClient.get("/get-user-expenses", {
-          params: {
-            filter_by: "upcoming",
-            limit: 3,
-            username: user!.username,
-          },
-        });
-
-        setUpcomingExpenses(response.data["user-expenses"] ?? []);
-      } catch (error) {
-        console.error("Failed to fetch upcoming expenses:", error);
-      } finally {
-        setExpensesLoading(false);
-      }
-    }
-
-    fetchUpcomingExpenses();
+        setDashboardSummaryLoading(true);
+        const res = await apiClient.get("/expenses/dashboard", { params: { username: user!.username } });
+        setDashboardSummary(res.data);
+      } catch { /* silent */ } finally { setDashboardSummaryLoading(false); }
+    })();
   }, [isLoaded, isSignedIn, user?.username]);
 
   useEffect(() => {
-    async function fetchFxData() {
+    if (!isLoaded || !isSignedIn || !user?.username) return;
+    (async () => {
+      try {
+        setExpensesLoading(true);
+        const res = await apiClient.get(`/expenses/user/${user!.username}`, { params: { filter_by: "upcoming", limit: 10 } });
+        setUpcomingExpenses(res.data["user-expenses"] ?? []);
+      } catch { /* silent */ } finally { setExpensesLoading(false); }
+    })();
+  }, [isLoaded, isSignedIn, user?.username]);
+
+  useEffect(() => {
+    (async () => {
       try {
         setFxLoading(true);
-
         const today = new Date();
         const start = new Date();
         start.setDate(today.getDate() - 14);
-
         const startStr = start.toISOString().split("T")[0];
-
         const [latestRes, seriesRes] = await Promise.all([
           fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=BRL"),
           fetch(`https://api.frankfurter.dev/v1/${startStr}..?base=USD&symbols=BRL`),
         ]);
-
-        const latestJson: FrankfurterLatest = await latestRes.json();
+        const latestJson: FrankfurterLatest     = await latestRes.json();
         const seriesJson: FrankfurterTimeSeries = await seriesRes.json();
-
         setLatestRate(latestJson.rates.BRL);
-
-        const points = Object.entries(seriesJson.rates)
-          .map(([date, rates]) => ({
-            date,
-            value: rates.BRL,
-          }))
-          .sort((a, b) => a.date.localeCompare(b.date));
-
-        setFxSeries(points);
-      } catch (error) {
-        console.error("Failed to fetch FX data:", error);
-      } finally {
-        setFxLoading(false);
-      }
-    }
-
-    fetchFxData();
+        setFxSeries(
+          Object.entries(seriesJson.rates)
+            .map(([date, rates]) => ({ date: date.slice(5), value: rates.BRL }))
+            .sort((a, b) => a.date.localeCompare(b.date))
+        );
+      } catch { /* silent */ } finally { setFxLoading(false); }
+    })();
   }, []);
 
   async function handleSubmitQuoteAlert() {
-    if (!user?.username) {
-      alert("No username found.");
-      return;
-    }
-
-    const parsedQuote = Number(targetQuote);
-
-    if (!targetQuote || Number.isNaN(parsedQuote) || parsedQuote <= 0) {
-      alert("Please enter a valid quotation.");
-      return;
-    }
-
-    const email =
-      user.primaryEmailAddress?.emailAddress ??
-      user.emailAddresses?.[0]?.emailAddress ??
-      null;
-
-    if (!email) {
-      alert("No email found for this account.");
-      return;
-    }
-
+    if (!user?.username) return;
+    const parsed = Number(targetQuote);
+    if (!targetQuote || Number.isNaN(parsed) || parsed <= 0) return;
+    const email = user.primaryEmailAddress?.emailAddress ?? user.emailAddresses?.[0]?.emailAddress ?? null;
+    if (!email) return;
     try {
       setIsSubmittingQuote(true);
-
-      const response = await apiClient.post("/set-quote-alert", {
-        username: user.username,
-        email,
-        target_rate: parsedQuote,
-      });
-
-      console.log("Quote alert saved:", response.data);
-      alert("Quotation alert saved.");
+      await apiClient.post("/fx/alerts", { username: user.username, email, target_rate: parsed });
       setTargetQuote("");
-    } catch (error: any) {
-      console.error("Failed to save quotation alert:", error);
-      alert(
-        JSON.stringify(error?.response?.data ?? error?.message ?? error, null, 2)
-      );
-    } finally {
-      setIsSubmittingQuote(false);
-    }
+    } catch { /* silent */ } finally { setIsSubmittingQuote(false); }
   }
 
-  const chartData = useMemo(() => {
-    if (fxSeries.length === 0) {
-      return { linePath: "", areaPath: "", labels: [], peak: null as any };
-    }
+  if (!isLoaded) return <div style={{ minHeight: "100vh", background: C.bg }} />;
+  if (!isSignedIn || !user) return null;
 
-    const width = 400;
-    const height = 150;
-    const values = fxSeries.map((p) => p.value);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = Math.max(max - min, 0.0001);
+  const previousRate = fxSeries.length >= 2 ? fxSeries[fxSeries.length - 2].value : null;
+  const rateChange   = latestRate !== null && previousRate !== null ? latestRate - previousRate : null;
+  const rateUp       = (rateChange ?? 0) >= 0;
 
-    const points = fxSeries.map((point, index) => {
-      const x = (index / Math.max(fxSeries.length - 1, 1)) * width;
-      const y = height - ((point.value - min) / range) * (height - 20) - 10;
-      return { ...point, x, y };
-    });
-
-    const linePath = points
-      .map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`)
-      .join(" ");
-
-    const areaPath = `${linePath} L${points[points.length - 1].x},${height} L${points[0].x},${height} Z`;
-
-    const peak = points.reduce((best, current) =>
-      current.value > best.value ? current : best
-    );
-
-    const labels = [
-      points[0],
-      points[Math.floor(points.length / 2)],
-      points[points.length - 1],
-    ].filter(Boolean);
-
-    return { linePath, areaPath, labels, peak };
-  }, [fxSeries]);
-
-  if (!isLoaded) {
-    return <div className="min-h-screen bg-slate-50 dark:bg-slate-950" />;
-  }
-
-  if (!isSignedIn || !user) {
-    return null;
-  }
+  const schedulerBillsCount = dashboardSummary?.count ?? 0;
+  const nextLiability       = dashboardSummary?.next_liability ?? null;
 
   function getCategoryIcon(category: string | null) {
     switch (category) {
-      case "Education":
-        return <School className="h-5 w-5" />;
-      case "Housing":
-        return <House className="h-5 w-5" />;
-      case "Food":
-        return <ShoppingCart className="h-5 w-5" />;
-      default:
-        return <ScrollText className="h-5 w-5" />;
+      case "Education": return <School       size={16} />;
+      case "Housing":   return <House        size={16} />;
+      case "Food":      return <ShoppingCart size={16} />;
+      default:          return <ScrollText   size={16} />;
     }
   }
 
-  function getStatusBadge(expense: Liability) {
-    if (expense.is_paid) {
-      return (
-        <span className="rounded bg-green-100 px-2 py-0.5 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-300">
-          Paid
-        </span>
-      );
-    }
-
-    const isOverdue = new Date(expense.due_date) < new Date();
-
-    if (isOverdue) {
-      return (
-        <span className="rounded bg-red-100 px-2 py-0.5 text-[10px] text-red-700 dark:bg-red-900/30 dark:text-red-300">
-          Overdue
-        </span>
-      );
-    }
-
+  function getStatusBadge(e: Liability) {
+    if (e.is_paid) return (
+      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(52,211,153,0.15)", color: C.green }}>Paid</span>
+    );
+    if (new Date(e.due_date) < new Date()) return (
+      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(248,113,113,0.15)", color: C.red }}>Overdue</span>
+    );
     return (
-      <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
-        Upcoming
-      </span>
+      <span className="rounded px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(162,123,92,0.15)", color: C.rose }}>Due</span>
     );
   }
 
-  function formatAmount(amount: number, currency: string) {
-    return new Intl.NumberFormat(currency === "BRL" ? "pt-BR" : "en-US", {
-      style: "currency",
-      currency: currency === "BRL" ? "BRL" : "USD",
-    }).format(amount);
+  function formatDate(d: string) {
+    const p = new Date(d);
+    if (Number.isNaN(p.getTime())) return d;
+    return p.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
-  function formatDate(dateString: string) {
-    const parsed = new Date(dateString);
-
-    if (Number.isNaN(parsed.getTime())) return dateString;
-
-    return parsed.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
-  const previousRate =
-    fxSeries.length >= 2 ? fxSeries[fxSeries.length - 2].value : null;
-  const rateChange =
-    latestRate !== null && previousRate !== null ? latestRate - previousRate : null;
-
-  const schedulerBillsCount = dashboardSummary?.count ?? 0;
-  const nextLiability = dashboardSummary?.next_liability ?? null;
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <div className="flex h-screen overflow-hidden">
-        <Navbar />
+    <div className="flex h-screen overflow-hidden font-sans antialiased" style={{ background: C.bg }}>
+      <Navbar />
 
-        <main className="flex-1 overflow-y-auto">
-          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-8 py-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/80">
-            <div className="flex items-center gap-4">
-              <h2 className="text-xl font-bold">Dashboard Overview</h2>
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <header
+          className="flex h-12 shrink-0 items-center justify-between px-4 sm:px-5"
+          style={{ borderBottom: `1px solid ${C.border}` }}
+        >
+          <h2 className="text-lg font-black" style={{ color: C.cream }}>Dashboard</h2>
+
+          <div className="flex items-center gap-3">
+            <button
+              className="flex h-8 w-8 items-center justify-center rounded-xl"
+              style={{ border: `1px solid ${C.border}`, color: C.muted }}
+            >
+              <Bell size={15} />
+            </button>
+            <div className="flex items-center gap-2.5" style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: "0.75rem" }}>
+              <span className="hidden text-sm font-semibold sm:block" style={{ color: C.cream }}>
+                {[user.firstName, user.lastName].filter(Boolean).join(" ") || user.username}
+              </span>
+              <img className="h-8 w-8 rounded-full object-cover" style={{ border: `2px solid rgba(162,123,92,0.3)` }} src={user.imageUrl} alt="" />
             </div>
+          </div>
+        </header>
 
-            <div className="flex items-center gap-4">
-              <button className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-                <BellDot className="h-5 w-5" />
-              </button>
+        {/* ── Main ───────────────────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-hidden min-h-0">
+          <div className="flex flex-col h-full p-3 gap-3">
 
-              <div className="flex items-center gap-3 border-l border-slate-200 pl-2 dark:border-slate-800">
-                <div className="hidden text-right sm:block">
-                  <p className="text-sm font-semibold">
-                    {[user.firstName, user.lastName].filter(Boolean).join(" ") || user.username}
+            {/* ── Stat Cards ─────────────────────────────────────────────────── */}
+            <div className="grid grid-cols-3 gap-3 shrink-0">
+
+              {/* Scheduled Bills */}
+              <Card>
+                <motion.div className="p-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(52,211,153,0.1)", color: C.green }}>
+                      <TrendingUp size={16} />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-right leading-tight" style={{ color: C.muted }}>
+                      Scheduled<br />Bills
+                    </span>
+                  </div>
+                  <p className="text-4xl font-black" style={{ color: C.cream }}>
+                    {dashboardSummaryLoading ? "—" : <CountUp to={schedulerBillsCount} />}
                   </p>
-                </div>
-                <img
-                  className="h-10 w-10 rounded-full border-2 border-blue-700/20 object-cover"
-                  alt="Student profile"
-                  src={user.imageUrl}
-                />
-              </div>
-            </div>
-          </header>
+                  <p className="mt-1.5 text-xs font-medium" style={{ color: C.green }}>Unpaid confirmed</p>
+                </motion.div>
+              </Card>
 
-          <div className="mx-auto max-w-7xl space-y-8 p-8">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              <div className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="absolute right-0 top-0 -mr-8 -mt-8 h-24 w-24 rounded-full bg-blue-700/5 transition-transform group-hover:scale-110" />
-                <p className="mb-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  Scheduled Bills
-                </p>
-                <h3 className="text-3xl font-bold tracking-tight">
-                  {dashboardSummaryLoading ? "..." : schedulerBillsCount}
-                </h3>
-                <div className="mt-4 flex items-center gap-2 text-sm font-medium text-emerald-500">
-                  <TrendingUp className="h-4 w-4" />
-                  <span>Unpaid confirmed expenses</span>
-                </div>
-              </div>
+              {/* Next Payment */}
+              <Card>
+                <motion.div className="p-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}>
+                      <Clock size={16} />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-right leading-tight" style={{ color: C.muted }}>
+                      Next<br />Payment
+                    </span>
+                  </div>
+                  <p className="text-4xl font-black leading-tight" style={{ color: C.cream }}>
+                    {dashboardSummaryLoading ? "—" : nextLiability ? formatDate(nextLiability.due_date) : "None"}
+                  </p>
+                  <p className="mt-1.5 text-xs font-medium truncate" style={{ color: C.rose }}>
+                    {dashboardSummaryLoading ? "Loading…" : nextLiability
+                      ? `${nextLiability.currency} ${nextLiability.amount} · ${nextLiability.name}`
+                      : "All clear"}
+                  </p>
+                </motion.div>
+              </Card>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <p className="mb-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  Next Payment Due
-                </p>
-                <h3 className="text-3xl font-bold tracking-tight">
-                  {dashboardSummaryLoading
-                    ? "..."
-                    : nextLiability
-                    ? formatDate(nextLiability.due_date)
-                    : "No due items"}
-                </h3>
-                <div className="mt-4 flex items-center gap-2 text-sm font-medium text-amber-500">
-                  <Clock className="h-4 w-4" />
-                  <span>
-                    {dashboardSummaryLoading
-                      ? "Loading..."
-                      : nextLiability
-                      ? `${formatAmount(nextLiability.amount, nextLiability.currency)} ${nextLiability.name}`
-                      : "You're all caught up"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <p className="mb-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  Set Alert for Cotation
-                </p>
-                <input
-                  value={targetQuote}
-                  onChange={(e) => setTargetQuote(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-2xl font-bold tracking-tight focus:border-blue-700 focus:ring-blue-700 dark:border-slate-700 dark:bg-slate-800"
-                  placeholder="5.000"
-                  type="number"
-                  step="0.0001"
-                />
-                <div className="mt-4 flex items-center gap-2 text-sm font-medium text-amber-500">
-                  <button
-                    onClick={handleSubmitQuoteAlert}
-                    disabled={isSubmittingQuote}
-                    className="rounded-xl bg-blue-700 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-700/25 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
-                  >
-                    {isSubmittingQuote ? "Submitting..." : "Submit"}
-                  </button>
-                </div>
-              </div>
+              {/* FX Rate */}
+              <Card>
+                <motion.div className="p-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}>
+                        <DollarSign size={16} />
+                      </div>
+                      <PulseDot color={C.green} />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-right leading-tight" style={{ color: C.muted }}>
+                      USD / BRL<br />Live Rate
+                    </span>
+                  </div>
+                  <p className="text-4xl font-black" style={{ color: C.cream }}>
+                    {fxLoading ? "—" : <CountUp to={latestRate ?? 0} decimals={4} />}
+                  </p>
+                  <p className="mt-1.5 text-xs font-medium" style={{ color: C.muted }}>Brazilian Real per Dollar</p>
+                </motion.div>
+              </Card>
             </div>
 
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-              <div className="flex flex-col gap-4 lg:col-span-1">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-bold">Upcoming Expenses</h4>
-                  <Link className="text-sm font-semibold text-blue-700 hover:underline" to="/expenses">
-                    View All
+            {/* ── Main Content Grid ───────────────────────────────────────────── */}
+            <div className="flex-1 grid gap-3 min-h-0" style={{ gridTemplateColumns: "5fr 7fr" }}>
+
+              {/* Left: Upcoming Expenses */}
+              <Card className="min-h-0 flex flex-col p-4">
+                <div className="shrink-0 flex items-center justify-between mb-3">
+                  <h4 className="text-base font-bold" style={{ color: C.cream }}>Upcoming Expenses</h4>
+                  <Link className="text-xs font-semibold" style={{ color: C.rose }} to="/expenses">
+                    View All →
                   </Link>
                 </div>
 
-                <div className="space-y-3">
+                <div className="flex-1 overflow-y-auto space-y-2 pr-0.5" style={{ scrollbarWidth: "none" as const }}>
                   {expensesLoading ? (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
-                      Loading upcoming expenses...
-                    </div>
+                    <div className="flex items-center justify-center h-full text-sm" style={{ color: C.muted }}>Loading…</div>
                   ) : upcomingExpenses.length === 0 ? (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
-                      No upcoming expenses found.
-                    </div>
-                  ) : (
-                    upcomingExpenses.map((expense) => (
-                      <div
-                        key={expense.id}
-                        className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+                    <div className="flex items-center justify-center h-full text-sm" style={{ color: C.muted }}>No upcoming expenses.</div>
+                  ) : upcomingExpenses.map((expense, i) => (
+                    <motion.div key={expense.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + i * 0.055 }}>
+                      <SpotlightCard
+                        className="flex items-center gap-3 rounded-xl p-3 cursor-default"
+                        style={{ background: C.cardAlt, border: `1px solid rgba(162,123,92,0.1)` }}
                       >
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                          style={{ background: "rgba(162,123,92,0.12)", color: C.rose }}>
                           {getCategoryIcon(expense.category)}
                         </div>
-
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{expense.name}</p>
-                          <p className="text-xs text-slate-500">Due {expense.due_date}</p>
+                          <p className="truncate text-sm font-semibold" style={{ color: C.cream }}>{expense.name}</p>
+                          <p className="text-xs" style={{ color: C.muted }}>{expense.due_date}</p>
                         </div>
-
-                        <div className="text-right">
-                          <p className="text-sm font-bold">
-                            {expense.currency} {expense.amount}
-                          </p>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold" style={{ color: C.cream }}>{expense.currency} {expense.amount}</p>
                           {getStatusBadge(expense)}
                         </div>
-                      </div>
-                    ))
-                  )}
+                      </SpotlightCard>
+                    </motion.div>
+                  ))}
                 </div>
-              </div>
+              </Card>
 
-              <div className="flex flex-col gap-4 lg:col-span-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-bold">Market Watch (USD/BRL)</h4>
+              {/* Right: FX Chart + Rate Alert */}
+              <Card className="min-h-0 flex flex-col p-4">
+                <div className="shrink-0 flex items-center justify-between mb-3">
+                  <h4 className="text-base font-bold" style={{ color: C.cream }}>Market Watch — USD / BRL</h4>
+                  <div className="flex items-center gap-2">
+                    <PulseDot color={C.green} />
+                    <span className="text-xs" style={{ color: C.muted }}>Live</span>
+                  </div>
                 </div>
 
-                <div className="flex min-h-[300px] flex-1 flex-col rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-                  {fxLoading ? (
-                    <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
-                      Loading FX data...
+                {/* Rate + change */}
+                {!fxLoading && (
+                  <div className="shrink-0 flex items-center gap-5 mb-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: C.muted }}>Rate</p>
+                      <p className="text-2xl font-black" style={{ color: C.cream }}>
+                        {latestRate?.toFixed(4) ?? "—"}
+                        <span className="ml-1 text-sm font-normal" style={{ color: C.muted }}>BRL</span>
+                      </p>
                     </div>
+                    <div style={{ width: 1, height: 36, background: C.border }} />
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: C.muted }}>24h Change</p>
+                      <p className="flex items-center gap-1 text-2xl font-black" style={{ color: rateUp ? C.green : C.red }}>
+                        {rateUp ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
+                        {rateChange !== null ? (rateUp ? "+" : "") + rateChange.toFixed(4) : "—"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Chart */}
+                <div className="flex-1 min-h-0">
+                  {fxLoading ? (
+                    <div className="flex items-center justify-center h-full text-sm" style={{ color: C.muted }}>Loading FX data…</div>
                   ) : (
-                    <>
-                      <div className="mb-8 flex items-center gap-6">
-                        <div>
-                          <p className="mb-1 text-xs font-bold uppercase tracking-widest text-slate-500">
-                            Rate
-                          </p>
-                          <p className="text-2xl font-bold">
-                            {latestRate?.toFixed(4) ?? "--"}
-                            <span className="ml-1 text-sm font-normal text-slate-400">
-                              BRL
-                            </span>
-                          </p>
-                        </div>
-
-                        <div className="h-10 w-px bg-slate-200 dark:bg-slate-800" />
-
-                        <div>
-                          <p className="mb-1 text-xs font-bold uppercase tracking-widest text-slate-500">
-                            Change
-                          </p>
-                          <p
-                            className={`text-2xl font-bold ${
-                              (rateChange ?? 0) >= 0 ? "text-emerald-500" : "text-red-500"
-                            }`}
-                          >
-                            {rateChange !== null ? rateChange.toFixed(4) : "--"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="relative flex flex-1 items-end pt-10">
-                        <div className="absolute inset-0 flex flex-col justify-between py-2 opacity-10">
-                          <div className="h-px w-full bg-slate-400" />
-                          <div className="h-px w-full bg-slate-400" />
-                          <div className="h-px w-full bg-slate-400" />
-                          <div className="h-px w-full bg-slate-400" />
-                        </div>
-
-                        <svg
-                          className="absolute inset-0 h-full w-full overflow-visible"
-                          preserveAspectRatio="none"
-                          viewBox="0 0 400 150"
-                        >
-                          <defs>
-                            <linearGradient id="chartGradient" x1="0%" x2="0%" y1="0%" y2="100%">
-                              <stop offset="0%" stopColor="#1152d4" stopOpacity="0.2" />
-                              <stop offset="100%" stopColor="#1152d4" stopOpacity="0" />
-                            </linearGradient>
-                          </defs>
-
-                          <path
-                            d={chartData.linePath}
-                            fill="none"
-                            stroke="#1152d4"
-                            strokeWidth="3"
-                          />
-                          <path d={chartData.areaPath} fill="url(#chartGradient)" />
-
-                          {chartData.peak && (
-                            <circle
-                              cx={chartData.peak.x}
-                              cy={chartData.peak.y}
-                              fill="#1152d4"
-                              r="5"
-                            />
-                          )}
-                        </svg>
-
-                        {chartData.peak && (
-                          <div
-                            className="pointer-events-none absolute rounded-md bg-slate-900 px-2 py-1 text-[10px] text-white shadow-lg"
-                            style={{
-                              left: `${Math.min(chartData.peak.x, 330)}px`,
-                              top: "16px",
-                            }}
-                          >
-                            Peak {chartData.peak.value.toFixed(4)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-4 flex justify-between text-[10px] font-bold uppercase tracking-tighter text-slate-400">
-                        {chartData.labels.map((label) => (
-                          <span key={label.date}>{label.date.slice(5)}</span>
-                        ))}
-                      </div>
-                    </>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={fxSeries} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="fxGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#A27B5C" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#A27B5C" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid vertical={false} stroke="rgba(162,123,92,0.06)" />
+                        <XAxis dataKey="date" tick={{ fill: "rgba(220,215,201,0.4)", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                        <YAxis domain={["auto", "auto"]} tick={{ fill: "rgba(220,215,201,0.4)", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(2)} />
+                        <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(162,123,92,0.2)", strokeWidth: 1 }} />
+                        <Area type="monotone" dataKey="value" stroke="#A27B5C" strokeWidth={2} fill="url(#fxGradient)" dot={false}
+                          activeDot={{ r: 4, fill: "#A27B5C", stroke: C.deep, strokeWidth: 2 }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   )}
                 </div>
-              </div>
+
+                {/* Rate Alert */}
+                <div className="shrink-0 mt-3 pt-3 flex items-center gap-3" style={{ borderTop: `1px solid ${C.border}` }}>
+                  <Bell size={14} className="shrink-0" style={{ color: C.muted }} />
+                  <p className="text-[10px] font-bold uppercase tracking-widest shrink-0" style={{ color: C.muted }}>Rate Alert</p>
+                  <input
+                    value={targetQuote}
+                    onChange={e => setTargetQuote(e.target.value)}
+                    className="flex-1 bg-transparent text-sm font-bold outline-none placeholder:opacity-30 min-w-0"
+                    style={{ color: C.cream, caretColor: C.rose }}
+                    placeholder="Target rate (e.g. 5.0000)"
+                    type="number"
+                    step="0.0001"
+                  />
+                  <ShimmerButton onClick={handleSubmitQuoteAlert} disabled={isSubmittingQuote}>
+                    {isSubmittingQuote ? "Saving…" : "Save Alert"}
+                  </ShimmerButton>
+                </div>
+              </Card>
             </div>
+
+
           </div>
         </main>
       </div>
