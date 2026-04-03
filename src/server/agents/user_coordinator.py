@@ -5,9 +5,9 @@ This node loops through all users with unpaid bills and runs the orchestrator
 and auto-executor for each user separately to maintain privacy.
 
 Flow:
-  router (global) → user_coordinator → trust_engine → END
+  router (global) → user_coordinator → END
     └─ For each user:
-         orchestrator (user-specific) → auto_executor (user-specific)
+         orchestrator (user-specific) → auto_executor (user-specific) → trust_engine (per-user audit)
 """
 from typing import List, Dict
 from sqlalchemy import select
@@ -16,6 +16,7 @@ from db.models import Liability
 from agents.state import AuraState
 from agents.orchestrator import orchestrator_node
 from agents.auto_executor import auto_executor_node, execute_payment
+from agents.trust import trust_engine_node
 
 
 async def get_users_with_unpaid_bills() -> List[str]:
@@ -84,6 +85,7 @@ async def user_coordinator_node(state: AuraState):
 
     all_decisions = []
     all_execution_results = []
+    all_audit_hashes = []
 
     # Process each user separately
     for username in users:
@@ -94,7 +96,9 @@ async def user_coordinator_node(state: AuraState):
         orchestrator_result = await orchestrator_node(user_state)
 
         user_decisions = orchestrator_result.get("payment_decisions", [])
-        all_decisions.extend(user_decisions)
+
+        # Mark which decisions were executed before auditing
+        execution_results = []
 
         # Run auto-executor for this user's decisions
         if user_decisions:
@@ -107,7 +111,6 @@ async def user_coordinator_node(state: AuraState):
             if auto_executable:
                 print(f"   🤖 Auto-Executor: Found {len(auto_executable)} payment(s) to execute for @{username}")
 
-                execution_results = []
                 for decision in auto_executable:
                     liability_id = decision.get("liability_id")
                     name = decision.get("name")
@@ -129,6 +132,8 @@ async def user_coordinator_node(state: AuraState):
                             "status": "executed",
                             "transaction_id": result["transaction_id"]
                         })
+                        # Mark this decision as executed
+                        decision["executed"] = True
                     else:
                         error = result["error"]
                         if "already paid" in error.lower():
@@ -152,11 +157,36 @@ async def user_coordinator_node(state: AuraState):
             else:
                 print(f"   ℹ️  No auto-executable payments for @{username}")
 
+        # Create per-user audit trail
+        # Build user-specific state for trust engine
+        user_audit_state = {
+            **state,
+            "username": username,
+            "payment_decisions": user_decisions,
+        }
+
+        # Run trust engine for this user only
+        print(f"   🔐 Creating audit trail for @{username}...")
+        trust_result = await trust_engine_node(user_audit_state)
+
+        audit_hash = trust_result.get("audit_hash")
+        if audit_hash:
+            all_audit_hashes.append({
+                "username": username,
+                "audit_hash": audit_hash
+            })
+            print(f"   ✅ Audit created: {audit_hash[:16]}...")
+
+        # Add to combined results
+        all_decisions.extend(user_decisions)
+
     print(f"\n✅ User Coordinator: Processed {len(users)} user(s)")
     print(f"   Total decisions: {len(all_decisions)}")
     print(f"   Total executions: {len(all_execution_results)}")
+    print(f"   Total audit entries: {len(all_audit_hashes)}")
 
     return {
         "payment_decisions": all_decisions,
-        "auto_executor_results": all_execution_results
+        "auto_executor_results": all_execution_results,
+        "audit_hashes": all_audit_hashes
     }

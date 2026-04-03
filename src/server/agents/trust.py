@@ -199,9 +199,10 @@ async def trust_engine_node(state: AuraState):
     # Generate human-readable reasoning summary from payment decisions
     payment_decisions = state.get("payment_decisions", [])
     market_analysis = state.get("market_analysis", {})
+    username = state.get("username", "unknown")
 
     if not payment_decisions:
-        reasoning_text = "No bills to evaluate."
+        reasoning_text = f"[@{username}] No bills to evaluate."
     else:
         # Count pay vs wait decisions
         pay_now = [d for d in payment_decisions if d.get("recommended_action") == "pay"]
@@ -220,16 +221,16 @@ async def trust_engine_node(state: AuraState):
             executed_bills = ", ".join([f"{d.get('bill_name', 'Unknown')} (${d.get('amount_usd', 0):.2f})" for d in executed[:3]])
             if len(executed) > 3:
                 executed_bills += f" and {len(executed) - 3} more"
-            reasoning_text = f"Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Pay {len(pay_now)}, Wait {len(wait_decisions)}. Executed {len(executed)} payment(s): {executed_bills}."
+            reasoning_text = f"[@{username}] Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Pay {len(pay_now)}, Wait {len(wait_decisions)}. Executed {len(executed)} payment(s): {executed_bills}."
         elif pay_now:
             # Show recommended payments (not executed)
             pay_bills = ", ".join([f"{d.get('bill_name', 'Unknown')} (${d.get('amount_usd', 0):.2f})" for d in pay_now[:3]])
             if len(pay_now) > 3:
                 pay_bills += f" and {len(pay_now) - 3} more"
-            reasoning_text = f"Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Pay {len(pay_now)} ({pay_bills}), Wait {len(wait_decisions)}. No auto-execution (manual approval required)."
+            reasoning_text = f"[@{username}] Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Pay {len(pay_now)} ({pay_bills}), Wait {len(wait_decisions)}. No auto-execution (manual approval required)."
         else:
             # All wait
-            reasoning_text = f"Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Wait on all {total} bill(s) for better rates."
+            reasoning_text = f"[@{username}] Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Wait on all {total} bill(s) for better rates."
 
     # Include the full market analysis in the audit payload
     decision_payload = {
