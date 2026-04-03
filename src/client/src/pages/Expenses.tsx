@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Modal from "../components/Modal";
 import AddExpensesModal from "../components/AddExpensesModal";
 import apiClient from "../API/client";
-import { getExpenseStats, updateExpense } from "../API/ExpensesClient";
+import { getExpenseStats, updateExpense, deleteExpense } from "../API/ExpensesClient";
 import { useUser } from "@clerk/react-router";
 
 // ─── palette ──────────────────────────────────────────────────────────────────
@@ -118,6 +118,21 @@ export default function ExpensesPage() {
       }
     } catch (error) {
       console.error("Failed to update expense:", error);
+    }
+  }
+
+  async function handleExpenseDelete(expenseId: number) {
+    try {
+      await deleteExpense(expenseId);
+
+      setExpenses((prev) => prev.filter((expense) => expense.id !== expenseId));
+
+      if (user?.username) {
+        const statsResponse = await getExpenseStats(user.username);
+        setStats(statsResponse);
+      }
+    } catch (error) {
+      console.error("Failed to delete expense:", error);
     }
   }
 
@@ -280,6 +295,7 @@ export default function ExpensesPage() {
                         Category={expense.category ?? "Other"}
                         IsPaid={expense.is_paid}
                         onSave={handleExpenseSave}
+                        onDelete={handleExpenseDelete}
                       />
                     ))}
                   </div>
@@ -323,6 +339,7 @@ export default function ExpensesPage() {
                             Category={expense.category ?? "Other"}
                             IsPaid={expense.is_paid}
                             onSave={handleExpenseSave}
+                            onDelete={handleExpenseDelete}
                           />
                         ))}
                       </tbody>

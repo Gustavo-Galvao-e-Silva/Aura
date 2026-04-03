@@ -60,3 +60,8 @@ export async function updateExpense(
   const response = await apiClient.put(`/expenses/${expenseId}`, payload);
   return response.data;
 }
+
+export async function deleteExpense(expenseId: number) {
+  const response = await apiClient.delete(`/expenses/${expenseId}`);
+  return response.data;
+}

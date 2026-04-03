@@ -5,6 +5,7 @@ import {
   HeartPulse,
   Home,
   ShoppingCart,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,6 +30,7 @@ type ExpenseProps = {
     category: string;
     is_paid: boolean;
   }) => Promise<void> | void;
+  onDelete?: (expenseId: number) => Promise<void> | void;
 };
 
 type FormData = {
@@ -87,6 +89,7 @@ function buildInitialFormData(props: ExpenseProps): FormData {
 export default function ExpenseComponent(props: ExpenseProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState<FormData>(buildInitialFormData(props));
 
   useEffect(() => {
@@ -146,6 +149,21 @@ export default function ExpenseComponent(props: ExpenseProps) {
   function handleCancel() {
     setFormData(buildInitialFormData(props));
     setIsEditing(false);
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Are you sure you want to delete "${formData.name}"?`)) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      await props.onDelete?.(props.id);
+    } catch (error) {
+      console.error("Failed to delete expense:", error);
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   function formatValue(value: number) {
@@ -280,8 +298,8 @@ export default function ExpenseComponent(props: ExpenseProps) {
         <div className="mt-4 flex gap-2">
           <button
             onClick={handleEditOrSave}
-            disabled={isSaving}
-            className="w-full rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSaving || isDeleting}
+            className="flex-1 rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSaving ? "Saving..." : isEditing ? "Save" : "Edit"}
           </button>
@@ -289,10 +307,25 @@ export default function ExpenseComponent(props: ExpenseProps) {
           {isEditing && (
             <button
               onClick={handleCancel}
-              disabled={isSaving}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              disabled={isSaving || isDeleting}
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Cancel
+            </button>
+          )}
+
+          {!isEditing && (
+            <button
+              onClick={handleDelete}
+              disabled={isSaving || isDeleting}
+              className="rounded-lg border border-red-300 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+              title="Delete expense"
+            >
+              {isDeleting ? (
+                "Deleting..."
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
             </button>
           )}
         </div>
@@ -415,7 +448,7 @@ export default function ExpenseComponent(props: ExpenseProps) {
           <div className="flex justify-end gap-2">
             <button
               onClick={handleEditOrSave}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
               className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? "Saving..." : isEditing ? "Save" : "Edit"}
@@ -424,10 +457,25 @@ export default function ExpenseComponent(props: ExpenseProps) {
             {isEditing && (
               <button
                 onClick={handleCancel}
-                disabled={isSaving}
+                disabled={isSaving || isDeleting}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 Cancel
+              </button>
+            )}
+
+            {!isEditing && (
+              <button
+                onClick={handleDelete}
+                disabled={isSaving || isDeleting}
+                className="rounded-lg border border-red-300 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                title="Delete expense"
+              >
+                {isDeleting ? (
+                  "Deleting..."
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
               </button>
             )}
           </div>

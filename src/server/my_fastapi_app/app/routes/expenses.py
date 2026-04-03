@@ -358,6 +358,33 @@ async def confirm_predicted_expense(
     }
 
 
+@router.delete("/{expense_id}")
+async def delete_expense(
+    expense_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete an existing expense.
+
+    - **expense_id**: Unique expense identifier
+
+    Returns success status after deletion.
+    """
+    result = await db.execute(select(Liability).filter(Liability.id == expense_id))
+    expense = result.scalar_one_or_none()
+
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    await db.delete(expense)
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": "Expense deleted successfully",
+    }
+
+
 @router.get("/dashboard")
 async def get_dashboard_expenses(
     username: str | None = Query(None),

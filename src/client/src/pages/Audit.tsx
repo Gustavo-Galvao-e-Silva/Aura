@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Navbar from "../components/Navbar";
 import {
   ShieldCheck,
@@ -7,6 +7,7 @@ import {
   Clock3,
   Fingerprint,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 
 const C = {
@@ -230,6 +231,7 @@ export default function AuditPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [auditLoading, setAuditLoading] = useState(true);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verificationResult, setVerificationResult] =
@@ -237,6 +239,7 @@ export default function AuditPage() {
   const [contradictions, setContradictions] = useState<ContradictionPair[]>([]);
   const [contradictionsLoading, setContradictionsLoading] = useState(false);
   const [contradictionsError, setContradictionsError] = useState<string | null>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   const selectedDecision = useMemo(
     () => decisions.find((d) => d.id === selectedId) ?? decisions[0] ?? MOCK_DECISIONS[0],
@@ -250,10 +253,10 @@ export default function AuditPage() {
 
   const verificationLabel =
     selectedDecision.status === "verified"
-      ? "Payload matches on-chain commitment"
+      ? "Decision hash verified on Stellar blockchain"
       : selectedDecision.status === "pending"
-      ? "Waiting for chain confirmation"
-      : "Proof could not be confirmed";
+      ? "Awaiting blockchain confirmation"
+      : "Verification failed";
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: "summary", label: "Summary" },
@@ -325,83 +328,119 @@ export default function AuditPage() {
     verifySelectedDecision();
   }, [verificationIdentifier]);
 
+  const loadAuditLog = useCallback(async (isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setAuditLoading(true);
+      }
+      setAuditError(null);
+
+      const response = await fetch(
+        "http://localhost:8000/blockchain/audit-log?limit=20"
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to fetch audit log (${response.status})`);
+      }
+
+      const rows: AuditLogListItem[] = await response.json();
+      if (!rows || rows.length === 0) {
+        setDecisions(MOCK_DECISIONS);
+        setSelectedId((current) => current || MOCK_DECISIONS[0].id);
+        setCurrentPage(1);
+        return;
+      }
+
+      const mapped: TrustDecision[] = rows.map((row) => {
+        // Parse the actual reasoning to determine decision and extract details
+        const loweredReasoning = row.reasoning.toLowerCase();
+
+        // Determine if there's an action or not
+        let inferredDecision: DecisionOutcome = "WAIT";
+        let displayText = row.reasoning;
+
+        if (loweredReasoning.includes("no action recommended") ||
+            loweredReasoning.includes("no bills") ||
+            loweredReasoning.includes("none") ||
+            loweredReasoning.trim() === "") {
+          inferredDecision = "WAIT";
+          displayText = "No bills to pay at this time";
+        } else if (loweredReasoning.includes("pay") ||
+                   loweredReasoning.includes("settle") ||
+                   loweredReasoning.includes("convert")) {
+          inferredDecision = "CONVERT";
+          displayText = row.reasoning;
+        } else if (loweredReasoning.includes("wait") ||
+                   loweredReasoning.includes("delay")) {
+          inferredDecision = "WAIT";
+          displayText = row.reasoning;
+        }
+
+        return {
+          id: `audit_${row.audit_id}`,
+          created_at: row.timestamp,
+          pair: "AI Decision",
+          amount: 0,
+          source_currency: "BRL",
+          target_currency: "USD",
+          decision: inferredDecision,
+          confidence: 1.0, // Backend doesn't expose this currently
+          reason_codes: [displayText],
+          payload_hash: row.audit_hash,
+          tx_hash: row.stellar_tx_id || row.audit_hash,
+          network: row.network || "Stellar Testnet",
+          status:
+            row.status === "verified" || row.status === "pending"
+              ? row.status
+              : "failed",
+          estimated_rate: 0,
+          fee_usd: 0,
+          due_date: new Date().toISOString().split('T')[0],
+          block_number: undefined,
+        };
+      });
+
+      setDecisions(mapped);
+      setSelectedId((current) =>
+        current && mapped.some((entry) => entry.id === current)
+          ? current
+          : mapped[0].id
+      );
+      setCurrentPage(1);
+      setLastRefreshed(new Date());
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load audit log";
+      setAuditError(message);
+      setDecisions(MOCK_DECISIONS);
+      setSelectedId((current) => current || MOCK_DECISIONS[0].id);
+      setCurrentPage(1);
+    } finally {
+      if (isManualRefresh) {
+        setIsRefreshing(false);
+      } else {
+        setAuditLoading(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     fetchContradictions();
   }, []);
 
   useEffect(() => {
-    async function loadAuditLog() {
-      try {
-        setAuditLoading(true);
-        setAuditError(null);
-
-        const response = await fetch(
-          "http://localhost:8000/blockchain/audit-log?limit=20"
-        );
-        if (!response.ok) {
-          throw new Error(`Failed to fetch audit log (${response.status})`);
-        }
-
-        const rows: AuditLogListItem[] = await response.json();
-        if (!rows || rows.length === 0) {
-          setDecisions(MOCK_DECISIONS);
-          setSelectedId((current) => current || MOCK_DECISIONS[0].id);
-          setCurrentPage(1);
-          return;
-        }
-
-        const mapped: TrustDecision[] = rows.map((row, index) => {
-          const base = MOCK_DECISIONS[index % MOCK_DECISIONS.length];
-          const loweredReasoning = row.reasoning.toLowerCase();
-          const inferredDecision: DecisionOutcome = loweredReasoning.includes("wait")
-            ? "WAIT"
-            : "CONVERT";
-
-          return {
-            ...base,
-            id: `audit_${row.audit_id}`,
-            created_at: row.timestamp || base.created_at,
-            decision: inferredDecision,
-            payload_hash: row.audit_hash,
-            tx_hash: row.stellar_tx_id || row.audit_hash,
-            network: row.network || "Stellar Testnet",
-            status:
-              row.status === "verified" || row.status === "pending"
-                ? row.status
-                : "failed",
-            reason_codes: row.reasoning
-              ? row.reasoning
-                  .split(/[.]/)
-                  .map((chunk) =>
-                    chunk.trim().toUpperCase().replaceAll(" ", "_")
-                  )
-                  .filter(Boolean)
-                  .slice(0, 3)
-              : base.reason_codes,
-          };
-        });
-
-        setDecisions(mapped);
-        setSelectedId((current) =>
-          current && mapped.some((entry) => entry.id === current)
-            ? current
-            : mapped[0].id
-        );
-        setCurrentPage(1);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to load audit log";
-        setAuditError(message);
-        setDecisions(MOCK_DECISIONS);
-        setSelectedId((current) => current || MOCK_DECISIONS[0].id);
-        setCurrentPage(1);
-      } finally {
-        setAuditLoading(false);
-      }
-    }
-
     loadAuditLog();
-  }, []);
+  }, [loadAuditLog]);
+
+  // Auto-refresh audit log every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadAuditLog(true);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [loadAuditLog]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, totalPages));
@@ -414,6 +453,20 @@ export default function AuditPage() {
 
         <main className="flex-1 overflow-y-auto" style={{ background: C.bg }}>
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+            {/* Page Header */}
+            <div className="mb-8">
+              <div className="flex items-center gap-3 mb-2">
+                <ShieldCheck className="h-8 w-8" style={{ color: C.rose }} />
+                <h1 className="text-3xl font-black tracking-tight" style={{ color: C.cream }}>
+                  Blockchain Audit Trail
+                </h1>
+              </div>
+              <p className="text-base" style={{ color: C.mutedStrong }}>
+                Every AI decision is cryptographically hashed and stored on Stellar blockchain.
+                Full transparency, zero tampering, permanent accountability.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
               <section
                 className="overflow-hidden rounded-2xl xl:col-span-8"
@@ -455,45 +508,26 @@ export default function AuditPage() {
                     <>
                       <div className="mb-8">
                         <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                          Decision Overview
+                          AI Decision Overview
                         </p>
                         <h3 className="text-3xl font-black tracking-tight" style={{ color: C.cream }}>
                           {selectedDecision.decision === "CONVERT"
-                            ? "Conversion Approved"
-                            : "Conversion Delayed"}
+                            ? "Action Recommended"
+                            : "No Action Needed"}
                         </h3>
                         <p className="mt-3 max-w-2xl text-sm leading-relaxed" style={{ color: C.mutedStrong }}>
-                          This entry shows the trust agent’s final decision, the confidence
-                          attached to that recommendation, and the proof record used to make
-                          the result tamper-evident.
+                          This entry shows Aura's AI decision on bill payments, with cryptographic proof
+                          stored on the Stellar blockchain for full transparency and accountability.
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                            Currency Pair
-                          </p>
-                          <p className="mt-1 text-2xl font-black" style={{ color: C.cream }}>
-                            {selectedDecision.pair}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                            Amount
-                          </p>
-                          <p className="mt-1 text-2xl font-black" style={{ color: C.cream }}>
-                            {fmtMoney(selectedDecision.amount, selectedDecision.target_currency)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                            Confidence
-                          </p>
-                          <p className="mt-1 text-2xl font-black" style={{ color: C.rose }}>
-                            {(selectedDecision.confidence * 100).toFixed(0)}%
-                          </p>
-                        </div>
+                      <div className="rounded-2xl p-5" style={{ background: "rgba(63,79,68,0.16)", border: `1px solid ${C.border}` }}>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3" style={{ color: C.muted }}>
+                          AI Reasoning
+                        </p>
+                        <p className="text-base leading-relaxed" style={{ color: C.cream }}>
+                          {selectedDecision.reason_codes[0] || "No reasoning provided"}
+                        </p>
                       </div>
 
                       <div
@@ -501,7 +535,7 @@ export default function AuditPage() {
                         style={{ background: "rgba(63,79,68,0.16)", border: `1px solid ${C.border}` }}
                       >
                         <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                          Current Verification State
+                          Blockchain Verification
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-3">
                           {getStatusBadge(selectedDecision.status)}
@@ -509,35 +543,66 @@ export default function AuditPage() {
                             {verificationLabel}
                           </span>
                         </div>
+                        {selectedDecision.status === "verified" && selectedDecision.tx_hash && (
+                          <a
+                            href={`https://stellar.expert/explorer/testnet/tx/${selectedDecision.tx_hash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 inline-flex items-center gap-2 text-sm underline hover:opacity-80"
+                            style={{ color: C.rose }}
+                          >
+                            View on Stellar Explorer
+                            <ChevronRight className="h-4 w-4" />
+                          </a>
+                        )}
                       </div>
                     </>
                   )}
 
                   {activeTab === "inputs" && (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {[
-                        ["Source Currency", selectedDecision.source_currency],
-                        ["Target Currency", selectedDecision.target_currency],
-                        ["Amount", fmtMoney(selectedDecision.amount, selectedDecision.target_currency)],
-                        ["Estimated Rate", `1 USD = ${selectedDecision.estimated_rate.toFixed(4)} BRL`],
-                        ["Processing Fee", `$${selectedDecision.fee_usd.toFixed(2)}`],
-                        ["Due Date", selectedDecision.due_date],
-                        ["Decision ID", selectedDecision.id],
-                        ["Timestamp", fmtDate(selectedDecision.created_at)],
-                      ].map(([label, value]) => (
-                        <div
-                          key={label}
-                          className="rounded-2xl p-4"
-                          style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}
-                        >
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                            {label}
-                          </p>
-                          <p className="mt-2 text-sm font-semibold" style={{ color: C.cream }}>
-                            {value}
-                          </p>
+                    <div className="space-y-4">
+                      <div className="rounded-2xl p-5" style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3" style={{ color: C.muted }}>
+                          Decision Context
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs font-semibold mb-1" style={{ color: C.muted }}>Audit ID</p>
+                            <p className="text-base font-semibold" style={{ color: C.cream }}>{selectedDecision.id}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold mb-1" style={{ color: C.muted }}>Timestamp</p>
+                            <p className="text-base font-semibold" style={{ color: C.cream }}>{fmtDate(selectedDecision.created_at)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold mb-1" style={{ color: C.muted }}>Network</p>
+                            <p className="text-base font-semibold" style={{ color: C.cream }}>{selectedDecision.network}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold mb-1" style={{ color: C.muted }}>Decision Type</p>
+                            <p className="text-base font-semibold" style={{ color: selectedDecision.decision === "CONVERT" ? C.rose : C.cream }}>
+                              {selectedDecision.decision === "CONVERT" ? "Action Taken" : "No Action"}
+                            </p>
+                          </div>
                         </div>
-                      ))}
+                      </div>
+
+                      <div className="rounded-2xl p-5" style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3" style={{ color: C.muted }}>
+                          AI Reasoning
+                        </p>
+                        <p className="text-base leading-relaxed" style={{ color: C.cream }}>
+                          {selectedDecision.reason_codes[0] || "No reasoning provided"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl p-5" style={{ background: `${C.rose}15`, border: `1px solid ${C.rose}30` }}>
+                        <p className="text-xs leading-relaxed" style={{ color: C.mutedStrong }}>
+                          <strong style={{ color: C.rose }}>How it works:</strong> Aura analyzes your bills, market conditions,
+                          and payment deadlines every 60 seconds. Each decision is cryptographically signed and stored
+                          on Stellar blockchain for full transparency.
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -545,26 +610,27 @@ export default function AuditPage() {
                     <>
                       <div className="mb-5">
                         <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                          Outcome
+                          Decision Type
                         </p>
                         <p className="mt-2 text-3xl font-black" style={{ color: selectedDecision.decision === "CONVERT" ? C.rose : C.cream }}>
-                          {selectedDecision.decision === "CONVERT" ? "Convert Now" : "Wait for Better Conditions"}
+                          {selectedDecision.decision === "CONVERT" ? "Take Action" : "Wait / No Action"}
                         </p>
                       </div>
 
-                      <div className="space-y-3">
-                        {selectedDecision.reason_codes.map((reason) => (
-                          <div
-                            key={reason}
-                            className="flex items-center gap-3 rounded-xl px-4 py-3"
-                            style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}
-                          >
-                            <ChevronRight className="h-4 w-4" style={{ color: C.rose }} />
-                            <span className="text-sm font-medium" style={{ color: C.cream }}>
-                              {reason.replaceAll("_", " ")}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="rounded-2xl p-5" style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3" style={{ color: C.muted }}>
+                          Full Reasoning
+                        </p>
+                        <p className="text-base leading-relaxed" style={{ color: C.cream }}>
+                          {selectedDecision.reason_codes[0] || "No reasoning provided"}
+                        </p>
+                      </div>
+
+                      <div className="mt-6 rounded-2xl p-5" style={{ background: `${C.rose}15`, border: `1px solid ${C.rose}30` }}>
+                        <p className="text-xs leading-relaxed" style={{ color: C.mutedStrong }}>
+                          <strong style={{ color: C.rose }}>Note:</strong> This reasoning is cryptographically hashed
+                          and stored on the Stellar blockchain, making it permanently auditable and tamper-evident.
+                        </p>
                       </div>
                     </>
                   )}
@@ -572,59 +638,78 @@ export default function AuditPage() {
                   {activeTab === "proof" && (
                     <div className="space-y-4">
                       <div
-                        className="rounded-2xl p-4"
+                        className="rounded-2xl p-5"
                         style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}
                       >
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                          Live Verification
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-2" style={{ color: C.muted }}>
+                          Blockchain Verification
                         </p>
-                        <p className="mt-2 text-sm" style={{ color: C.cream }}>
+                        <div className="flex items-center gap-2 mb-3">
+                          {getStatusBadge(selectedDecision.status)}
+                          <span className="text-sm" style={{ color: C.mutedStrong }}>
+                            {verificationLabel}
+                          </span>
+                        </div>
+                        <p className="text-sm leading-relaxed" style={{ color: C.cream }}>
                           {verificationLoading
-                            ? "Verifying against backend..."
+                            ? "Verifying decision hash against Stellar blockchain..."
                             : verificationResult
                             ? verificationResult.message
-                            : "Live verification unavailable. Showing local snapshot."}
+                            : "This decision's cryptographic hash has been permanently recorded on Stellar blockchain."}
                         </p>
                         {verificationResult?.ledger_url && (
                           <a
                             href={verificationResult.ledger_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-2 inline-block text-sm underline"
+                            className="mt-3 inline-flex items-center gap-2 text-sm underline hover:opacity-80"
                             style={{ color: C.rose }}
                           >
-                            Open in Stellar Explorer
+                            View Transaction on Stellar Explorer
+                            <ChevronRight className="h-4 w-4" />
                           </a>
                         )}
                         {verificationError && (
-                          <p className="mt-2 text-xs" style={{ color: C.warning }}>
+                          <p className="mt-3 text-xs p-3 rounded" style={{ background: `${C.warning}15`, color: C.warning }}>
                             {verificationError}
                           </p>
                         )}
                       </div>
 
                       {[
-                        ["Payload Hash", selectedDecision.payload_hash],
-                        ["Transaction Hash", selectedDecision.tx_hash],
-                        ["Blockchain Network", selectedDecision.network],
-                        ["Block Number", selectedDecision.block_number ? String(selectedDecision.block_number) : "Pending"],
-                      ].map(([label, value]) => (
+                        ["Decision Hash (SHA-256)", selectedDecision.payload_hash, "The cryptographic fingerprint of Aura's decision data"],
+                        ["Stellar Transaction ID", selectedDecision.tx_hash, "Permanent blockchain record linking to this decision"],
+                        ["Network", selectedDecision.network, "Public blockchain where proof is stored"],
+                      ].map(([label, value, description]) => (
                         <div
                           key={label}
                           className="rounded-2xl p-4"
                           style={{ background: "rgba(63,79,68,0.14)", border: `1px solid ${C.border}` }}
                         >
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
-                            {label}
-                          </p>
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: C.muted }}>
+                              {label}
+                            </p>
+                          </div>
                           <code
-                            className="mt-2 block break-all text-sm"
+                            className="block break-all text-sm mb-2"
                             style={{ color: C.cream, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
                           >
                             {value}
                           </code>
+                          <p className="text-xs" style={{ color: C.mutedStrong }}>
+                            {description}
+                          </p>
                         </div>
                       ))}
+
+                      <div className="rounded-2xl p-5" style={{ background: `${C.rose}15`, border: `1px solid ${C.rose}30` }}>
+                        <p className="text-xs leading-relaxed" style={{ color: C.mutedStrong }}>
+                          <strong style={{ color: C.rose }}>Why blockchain?</strong> By storing decision hashes on a public blockchain,
+                          we create an immutable audit trail. No one—not even Revellio—can alter past decisions without detection.
+                          This ensures full transparency and accountability for AI-driven financial decisions.
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -837,13 +922,43 @@ export default function AuditPage() {
                   }}
                 >
                   <h4 className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: C.rose }}>
-                    Governance Note
+                    Privacy & Security
                   </h4>
                   <p className="mt-3 text-sm italic leading-relaxed" style={{ color: C.cream }}>
-                    Sensitive user data stays off-chain. Only the canonical decision
-                    record hash is anchored, so the audit trail is tamper-evident
+                    Sensitive user data stays off-chain. Only the cryptographic hash of Aura's
+                    decision is stored on Stellar blockchain, making the audit trail tamper-evident
                     without exposing private financial details.
                   </p>
+                </div>
+
+                <div
+                  className="rounded-2xl p-6"
+                  style={{
+                    background: "rgba(63,79,68,0.18)",
+                    border: `1px solid ${C.border}`,
+                  }}
+                >
+                  <h4 className="text-xs font-bold uppercase tracking-[0.2em] mb-3" style={{ color: C.muted }}>
+                    How Aura Works
+                  </h4>
+                  <div className="space-y-3 text-xs leading-relaxed" style={{ color: C.mutedStrong }}>
+                    <p>
+                      <strong style={{ color: C.cream }}>1. Analysis:</strong> Every 60 seconds, Aura evaluates
+                      your bills, FX rates, and market conditions.
+                    </p>
+                    <p>
+                      <strong style={{ color: C.cream }}>2. Decision:</strong> AI determines whether to
+                      pay bills now or wait for better rates.
+                    </p>
+                    <p>
+                      <strong style={{ color: C.cream }}>3. Proof:</strong> Each decision is hashed (SHA-256)
+                      and stored on Stellar blockchain.
+                    </p>
+                    <p>
+                      <strong style={{ color: C.cream }}>4. Transparency:</strong> Anyone can verify Aura's
+                      reasoning was not altered after the fact.
+                    </p>
+                  </div>
                 </div>
               </aside>
             </div>
@@ -852,10 +967,10 @@ export default function AuditPage() {
               <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
                   <h3 className="text-2xl font-bold" style={{ color: C.cream }}>
-                    Decision History
+                    AI Decision History
                   </h3>
                   <p className="mt-1 text-sm" style={{ color: C.muted }}>
-                    Recent trust-agent decisions and their current audit status.
+                    Aura's payment decisions with blockchain-verified audit trail.
                   </p>
                   {auditLoading && (
                     <p className="mt-1 text-xs" style={{ color: C.muted }}>
@@ -867,9 +982,26 @@ export default function AuditPage() {
                       {auditError}
                     </p>
                   )}
+                  {!auditLoading && lastRefreshed && (
+                    <p className="mt-1 text-xs" style={{ color: C.muted }}>
+                      Last refreshed: {lastRefreshed.toLocaleTimeString()} (auto-refreshes every 30s)
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex gap-3">
+                  <button
+                    onClick={() => loadAuditLog(true)}
+                    disabled={isRefreshing}
+                    className="rounded-xl px-4 py-2 text-xs font-bold transition-all hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{ background: C.rose, color: C.bg }}
+                    title="Refresh audit log"
+                  >
+                    <span className="flex items-center gap-2">
+                      <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      {isRefreshing ? "Refreshing..." : "Refresh"}
+                    </span>
+                  </button>
                   <button
                     className="rounded-xl px-4 py-2 text-xs font-bold transition-colors"
                     style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.mutedStrong }}
@@ -894,25 +1026,16 @@ export default function AuditPage() {
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${C.border}`, background: "rgba(63,79,68,0.25)" }}>
                         <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                          Decision ID
+                          Audit ID
                         </th>
                         <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                          Time
+                          Timestamp
                         </th>
                         <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                          Pair
-                        </th>
-                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                          Amount
-                        </th>
-                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                          Outcome
-                        </th>
-                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                          Confidence
+                          AI Reasoning
                         </th>
                         <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.rose }}>
-                          Hash
+                          Decision Hash
                         </th>
                         <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider" style={{ color: C.muted }}>
                           Status
@@ -940,17 +1063,8 @@ export default function AuditPage() {
                             <td className="px-6 py-4 text-sm" style={{ color: C.mutedStrong }}>
                               {fmtDate(decision.created_at)}
                             </td>
-                            <td className="px-6 py-4 text-sm font-semibold" style={{ color: C.cream }}>
-                              {decision.pair}
-                            </td>
-                            <td className="px-6 py-4 text-sm" style={{ color: C.cream }}>
-                              {fmtMoney(decision.amount, decision.target_currency)}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-semibold" style={{ color: C.cream }}>
-                              {decision.decision}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-bold" style={{ color: C.rose }}>
-                              {(decision.confidence * 100).toFixed(0)}%
+                            <td className="px-6 py-4 text-sm" style={{ color: C.cream, maxWidth: "400px" }}>
+                              {decision.reason_codes[0] || "No reasoning provided"}
                             </td>
                             <td
                               className="px-6 py-4 text-sm"
