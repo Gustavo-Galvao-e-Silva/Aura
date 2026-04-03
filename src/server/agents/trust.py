@@ -196,8 +196,40 @@ async def trust_engine_node(state: AuraState):
     This dual approach provides both cryptographic proof (blockchain)
     and analytical insights (semantic search) for AI explainability.
     """
-    reasoning_text = state.get("selected_route") or "No action recommended."
+    # Generate human-readable reasoning summary from payment decisions
+    payment_decisions = state.get("payment_decisions", [])
     market_analysis = state.get("market_analysis", {})
+
+    if not payment_decisions:
+        reasoning_text = "No bills to evaluate."
+    else:
+        # Count pay vs wait decisions
+        pay_now = [d for d in payment_decisions if d.get("recommended_action") == "pay"]
+        wait_decisions = [d for d in payment_decisions if d.get("recommended_action") == "wait"]
+
+        # Count executed payments
+        executed = [d for d in payment_decisions if d.get("executed")]
+
+        # Build summary
+        total = len(payment_decisions)
+        market_pred = market_analysis.get("prediction", "UNKNOWN")
+        market_conf = int(market_analysis.get("confidence", 0) * 100)
+
+        if executed:
+            # Show executed payments
+            executed_bills = ", ".join([f"{d.get('bill_name', 'Unknown')} (${d.get('amount_usd', 0):.2f})" for d in executed[:3]])
+            if len(executed) > 3:
+                executed_bills += f" and {len(executed) - 3} more"
+            reasoning_text = f"Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Pay {len(pay_now)}, Wait {len(wait_decisions)}. Executed {len(executed)} payment(s): {executed_bills}."
+        elif pay_now:
+            # Show recommended payments (not executed)
+            pay_bills = ", ".join([f"{d.get('bill_name', 'Unknown')} (${d.get('amount_usd', 0):.2f})" for d in pay_now[:3]])
+            if len(pay_now) > 3:
+                pay_bills += f" and {len(pay_now) - 3} more"
+            reasoning_text = f"Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Pay {len(pay_now)} ({pay_bills}), Wait {len(wait_decisions)}. No auto-execution (manual approval required)."
+        else:
+            # All wait
+            reasoning_text = f"Analyzed {total} bill(s). Market: {market_pred} ({market_conf}% confidence). Recommended: Wait on all {total} bill(s) for better rates."
 
     # Include the full market analysis in the audit payload
     decision_payload = {
